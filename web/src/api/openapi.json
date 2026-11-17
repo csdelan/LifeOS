@@ -5030,6 +5030,56 @@
         }
       }
     },
+    "/api/focus/primary": {
+      "post": {
+        "tags": [
+          "Focus"
+        ],
+        "operationId": "SetPrimaryFocus",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPrimaryFocusBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FocusChoiceRow"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/artifacts/{id}": {
       "get": {
         "tags": [
@@ -9266,11 +9316,80 @@
           }
         }
       },
+      "FocusChoiceRow": {
+        "required": [
+          "level",
+          "holds",
+          "written"
+        ],
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": "string"
+          },
+          "goalId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "goalUrn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "goalTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "holds": {
+            "type": "boolean"
+          },
+          "lapsedAs": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "reviewId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "reviewTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "chosenAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "written": {
+            "type": "boolean"
+          }
+        }
+      },
       "FocusGoal": {
         "required": [
           "title",
           "subjectId",
-          "kind"
+          "kind",
+          "chosen",
+          "chosenAt",
+          "chosenIn",
+          "lapsedTitle",
+          "lapsedAs"
         ],
         "type": "object",
         "properties": {
@@ -9291,6 +9410,34 @@
               {
                 "$ref": "#/components/schemas/CoverRead"
               }
+            ]
+          },
+          "chosen": {
+            "type": "boolean"
+          },
+          "chosenAt": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date-time"
+          },
+          "chosenIn": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lapsedTitle": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "lapsedAs": {
+            "type": [
+              "null",
+              "string"
             ]
           }
         }
@@ -12416,6 +12563,25 @@
           }
         }
       },
+      "SetPrimaryFocusBody": {
+        "type": "object",
+        "properties": {
+          "goalId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          },
+          "reviewId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "SleepPeriodRow": {
         "type": "object",
         "properties": {
@@ -13989,6 +14155,9 @@
     },
     {
       "name": "Reviews"
+    },
+    {
+      "name": "Focus"
     },
     {
       "name": "Artifacts"

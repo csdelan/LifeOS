@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0073 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0074 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -236,6 +236,7 @@ CREATE INDEX event_archive_change_subject ON bsk.event USING btree (((payload ->
 CREATE INDEX event_artifact_idx ON bsk.event USING btree (artifact_id, recorded_at, id) WHERE (artifact_id IS NOT NULL);
 CREATE INDEX event_exception_day_idx ON bsk.event USING btree ((((payload -> 'exception_day'::text) ->> 'day'::text)), recorded_at) WHERE ((kind = 'note'::text) AND jsonb_exists(payload, 'exception_day'::text));
 CREATE INDEX event_fast_idx ON bsk.event USING btree ((((payload -> 'fast'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'activity'::text) AND jsonb_exists(payload, 'fast'::text));
+CREATE INDEX event_focus_idx ON bsk.event USING btree ((((payload -> 'focus'::text) ->> 'level'::text)), recorded_at) WHERE ((kind = 'note'::text) AND jsonb_exists(payload, 'focus'::text));
 CREATE INDEX event_food_day_idx ON bsk.event USING btree ((((payload -> 'food_day'::text) ->> 'on'::text))) WHERE ((kind = 'activity'::text) AND jsonb_exists(payload, 'food_day'::text));
 CREATE INDEX event_kind_occurred_idx ON bsk.event USING btree (kind, occurred_at);
 CREATE INDEX event_lab_visit_idx ON bsk.event USING btree ((((payload -> 'lab_visit'::text) ->> 'id'::text)), recorded_at) WHERE ((kind = 'measurement'::text) AND jsonb_exists(payload, 'lab_visit'::text));
@@ -509,6 +510,31 @@ CREATE VIEW bsk.v_fast AS
     event_id,
     fast_key
    FROM live l;
+
+-- TODAY-1, D6 (focus plan G1): the Primary focus Chris chose, one row per level (weekly): the newest focus event by recorded_at. goal_id is the Goal, or null when he chose No focus; review_id the review it was chosen in, or null; chosen_at when. Focus shows the Goal while it is Active and suggests one otherwise.
+CREATE VIEW bsk.v_focus AS
+ WITH version AS (
+         SELECT e.id AS event_id,
+            (e.payload -> 'focus'::text) ->> 'level'::text AS level,
+            e.payload -> 'focus'::text AS f,
+            e.recorded_at,
+            row_number() OVER (PARTITION BY ((e.payload -> 'focus'::text) ->> 'level'::text) ORDER BY e.recorded_at DESC, e.id DESC) AS rn
+           FROM bsk.event e
+          WHERE e.kind = 'note'::text AND jsonb_exists(e.payload, 'focus'::text) AND jsonb_typeof(e.payload -> 'focus'::text) = 'object'::text
+        )
+ SELECT level,
+        CASE
+            WHEN bsk.is_uuid_text(f ->> 'goal_id'::text) THEN (f ->> 'goal_id'::text)::uuid
+            ELSE NULL::uuid
+        END AS goal_id,
+        CASE
+            WHEN bsk.is_uuid_text(f ->> 'review_id'::text) THEN (f ->> 'review_id'::text)::uuid
+            ELSE NULL::uuid
+        END AS review_id,
+    recorded_at AS chosen_at,
+    event_id
+   FROM version
+  WHERE rn = 1 AND level IS NOT NULL;
 
 -- FOOD-3 / FOOD-4 / FOOD-6 (D13): one row per home-zone day with a live food entry, an ended fast or a close — calories, score x calories (numeric, since a score can be a half), the longest fast ending that day, its drinks, and whether it is closed (by hand, or because the day is over). DietRules (C#) scores it.
 CREATE VIEW bsk.v_food_day AS
@@ -1906,7 +1932,7 @@ BEGIN
 END;
 $function$;
 
--- The record an event is a version of (an Oura record, a meal, a fast, a space photo or rating, a metric reading, a lab visit, an exception day, a workout's note), or null when it stands alone. Its newest version by recorded_at is the record.
+-- The record an event is a version of (an Oura record, a meal, a fast, a space photo or rating, a metric reading, a lab visit, an exception day, a workout's note, the Primary focus), or null when it stands alone. Its newest version by recorded_at is the record.
 CREATE OR REPLACE FUNCTION bsk.event_record(source_id text, external_id text, payload jsonb)
  RETURNS text
  LANGUAGE sql
@@ -1923,6 +1949,7 @@ AS $function$
         WHEN payload->'lab_visit'->>'id' IS NOT NULL THEN 'lab_visit:' || (payload->'lab_visit'->>'id')
         WHEN payload->'exception_day'->>'day' IS NOT NULL THEN 'exception_day:' || (payload->'exception_day'->>'day')
         WHEN payload->'workout_note'->>'workout' IS NOT NULL THEN 'workout_note:' || (payload->'workout_note'->>'workout')
+        WHEN payload->'focus'->>'level' IS NOT NULL THEN 'focus:' || (payload->'focus'->>'level')
     END;
 $function$;
 

@@ -28,6 +28,7 @@ import type {
 import { defaultStatus } from "@/lib/production-ui-types";
 import type { TimerEvent } from "@/lib/timer";
 import type { MockFoodEvent } from "@/lib/mock/food-fold";
+import type { MockFocusChoice } from "@/lib/mock/focus-store";
 import { sceneById, storedCoverOf } from "@/lib/mock/covers";
 import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/mock/domain-fold";
 import { ensureSeries, repetitionRows } from "@/lib/mock/task-series";
@@ -123,7 +124,8 @@ export interface MockState {
   coinValueUsd: number;
   /** Food Log events, in write order (FOOD-1..3): entries, fasts and day closes. */
   foodEvents: MockFoodEvent[];
-  primaryFocus: { title: string; subjectId: string; kind: "goal" };
+  /** The Primary focus as last chosen (focus plan G1); Focus suggests one while it's null. */
+  focusChoice: MockFocusChoice | null;
   objectives: { id: string; title: string; subjectId: string }[];
 }
 
@@ -1666,7 +1668,7 @@ export function createSeed(): MockState {
       firstCompletedOn: yesterday,
       missed: false,
       completedLate: false,
-      keepFocus: true,
+      keepFocus: false,
       reflection: {
         path: `10 Reflections/${yesterday} Daily reflection.md`,
         vault: "Chris2.0",
@@ -1710,11 +1712,8 @@ export function createSeed(): MockState {
     ],
     coinValueUsd: 0.5,
     foodEvents: seedFood(),
-    primaryFocus: {
-      title: "Ship LifeOS production UI",
-      subjectId: "goal-lifeos",
-      kind: "goal",
-    },
+    // Chosen in yesterday's review over the date rule, which would suggest Sleep through the night.
+    focusChoice: { goalId: "goal-lifeos", reviewId: reviews[0].id, chosenAt: isoAgo(18) },
     objectives: [
       { id: "obj-1", title: "Land the Map graph beside the outline", subjectId: "task-graph" },
       { id: "obj-2", title: "Clear Inbox before noon", subjectId: "cmt-inbox" },

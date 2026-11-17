@@ -2,6 +2,7 @@ import { fits } from "@/lib/live/fits";
 import { api, unwrap } from "@/lib/live/http";
 import { liveMeasurementWrites } from "@/lib/features/measurements/writes";
 import { livePeopleWrites } from "@/lib/features/people/writes";
+import { liveFocusWrites } from "@/lib/features/focus/writes";
 import type {
   ActivitySyncResult,
   BinaryCaptureResult,
@@ -41,6 +42,7 @@ export function createLiveWriteClient(): LifeOsWriteClient {
   return {
     ...liveMeasurementWrites,
     ...livePeopleWrites,
+    ...liveFocusWrites,
 
     async newSubject(req) {
       return fits<CreatedSubject>()(await unwrap(api().POST("/api/subjects", { body: req })));

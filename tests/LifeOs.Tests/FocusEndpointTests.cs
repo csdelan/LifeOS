@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using LifeOs.Domain;
@@ -112,6 +113,69 @@ public sealed class FocusEndpointTests(PostgresFixture postgres)
         var day = await TestReaders.On(db.ConnectionString).Get<LifeOs.Api.Read.FocusReader>().DayAsync(today, cancellationToken: Ct);
 
         Assert.Equal(new[] { goal, project, task }.Order(), day.Open.Select(s => s.Id).Order());
+    }
+
+    [Fact]
+    public async Task The_goal_chosen_in_a_review_leads_until_it_ends_and_then_focus_suggests_one()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var today = await db.TodayAsync();
+        string Day(int offset) => today.AddDays(offset).ToString("yyyy-MM-dd");
+        var later = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Run a marathon", attrs = new Dictionary<string, string> { ["target_date"] = Day(300) } });
+        var sooner = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Ship the shed", attrs = new Dictionary<string, string> { ["target_date"] = Day(60) } });
+        await StatusAsync(host, later, "Active");
+        await StatusAsync(host, sooner, "Active");
+        var training = await NewAsync(host, new { type = SubjectTypes.Project, title = "Training block", parent = later.ToString(), relation = SubjectRelations.ResultsIn });
+        await StatusAsync(host, training, "Active");
+        var review = await host.Client.PostAsJsonAsync("/api/reviews/open", new { kind = "daily" }, Ct);
+        var reviewRow = await review.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        var reviewId = reviewRow.GetProperty("id").GetGuid();
+
+        // Nothing chosen: the nearest target date leads, as a suggestion.
+        var suggested = (await host.Client.GetFromJsonAsync<JsonElement>("/api/focus", Ct)).GetProperty("primaryFocus");
+        Assert.Equal((sooner.ToString(), false), (suggested.GetProperty("subjectId").GetString(), suggested.GetProperty("chosen").GetBoolean()));
+
+        // Chosen in the review: the marathon leads, with its project, whatever its date.
+        var choice = await host.Client.PostAsJsonAsync("/api/focus/primary", new { goalId = later, reviewId }, Ct);
+        Assert.True(choice.IsSuccessStatusCode, await choice.Content.ReadAsStringAsync(Ct));
+        var chosenRow = await choice.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal((later, true, true), (chosenRow.GetProperty("goalId").GetGuid(), chosenRow.GetProperty("holds").GetBoolean(), chosenRow.GetProperty("written").GetBoolean()));
+        var focus = await host.Client.GetFromJsonAsync<JsonElement>("/api/focus", Ct);
+        var chosen = focus.GetProperty("primaryFocus");
+        Assert.Equal((later.ToString(), true, reviewRow.GetProperty("title").GetString()), (
+            chosen.GetProperty("subjectId").GetString(), chosen.GetProperty("chosen").GetBoolean(), chosen.GetProperty("chosenIn").GetString()));
+        Assert.Equal([training], Ids(focus.GetProperty("objectives")));
+        Assert.Equal(JsonValueKind.Null, chosen.GetProperty("lapsedTitle").ValueKind);
+        var reviews = await host.Client.GetFromJsonAsync<JsonElement>("/api/reviews", Ct);
+        Assert.False(reviews.EnumerateArray().Single(r => r.GetProperty("id").GetGuid() == reviewId).GetProperty("keepFocus").GetBoolean());
+
+        // The marathon is done: focus suggests the shed again, and names what lapsed.
+        await StatusAsync(host, later, "Completed");
+        var lapsed = (await host.Client.GetFromJsonAsync<JsonElement>("/api/focus", Ct)).GetProperty("primaryFocus");
+        Assert.Equal((sooner.ToString(), false, "Run a marathon", "Completed"), (
+            lapsed.GetProperty("subjectId").GetString(), lapsed.GetProperty("chosen").GetBoolean(),
+            lapsed.GetProperty("lapsedTitle").GetString(), lapsed.GetProperty("lapsedAs").GetString()));
+    }
+
+    [Fact]
+    public async Task Only_an_active_goal_can_be_chosen_as_the_focus()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, DomainTestDatabase.ApiZone);
+        var draft = await NewAsync(host, new { type = SubjectTypes.Goal, title = "Learn Spanish" });
+
+        var refused = await host.Client.PostAsJsonAsync("/api/focus/primary", new { goalId = draft }, Ct);
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Contains("Active Goal", await refused.Content.ReadAsStringAsync(Ct));
+
+        var missing = await host.Client.PostAsJsonAsync("/api/focus/primary", new { goalId = Guid.NewGuid() }, Ct);
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        // Clearing a focus never chosen writes nothing.
+        var none = await host.Client.PostAsJsonAsync("/api/focus/primary", new { goalId = (Guid?)null }, Ct);
+        var row = await none.Content.ReadFromJsonAsync<JsonElement>(Ct);
+        Assert.Equal((false, JsonValueKind.Null), (row.GetProperty("written").GetBoolean(), row.GetProperty("chosenAt").ValueKind));
     }
 
     [Fact]

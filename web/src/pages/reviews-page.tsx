@@ -197,6 +197,7 @@ export function ReviewsPage() {
             doc={doc}
             onDirty={setDirty}
             onSave={(body) => writes.saveReview(doc.id, body)}
+            onChooseFocus={(goalId) => writes.setPrimaryFocus(goalId, doc.id)}
             onComplete={() => writes.completeReview(doc.id)}
           />
         ) : null}

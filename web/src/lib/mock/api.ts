@@ -98,6 +98,7 @@ import {
 } from "@/lib/mock/store";
 import { mockFoodDay, mockFoodDays, mockFoodRecent } from "@/lib/mock/food-store";
 import { detailWithPhoto, withPersonPhoto } from "@/lib/mock/people-store";
+import { mockFocusChoice } from "@/lib/mock/focus-store";
 import { mockSearchScenes } from "@/lib/mock/covers";
 import {
   mockActivityDay,
@@ -562,7 +563,7 @@ export const mockReads: LifeOsReads = {
       habits: mockHabits(),
       occurrences: s.occurrences,
       today: todayIso(),
-      primaryFocus: s.primaryFocus,
+      focusChoice: mockFocusChoice(),
       objectives: s.objectives,
     });
   },

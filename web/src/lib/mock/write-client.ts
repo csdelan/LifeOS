@@ -95,6 +95,7 @@ import {
   mockSetMetric,
 } from "@/lib/mock/measurements-store";
 import { mockRemovePersonPhoto, mockSetPersonPhoto } from "@/lib/mock/people-store";
+import { mockSetPrimaryFocus } from "@/lib/mock/focus-store";
 
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms));
 
@@ -583,6 +584,13 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
       await wait();
       completeReviewDoc(id);
       bump();
+    },
+
+    async setPrimaryFocus(goalId, reviewId) {
+      await wait();
+      const result = mockSetPrimaryFocus(goalId, reviewId);
+      bump();
+      return result;
     },
 
     async redeem(req) {

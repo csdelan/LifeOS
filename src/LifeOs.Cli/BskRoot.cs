@@ -61,6 +61,7 @@ internal sealed record BskRoot(RootCommand Command, Option<string?> Connection, 
         rootCommand.Subcommands.Add(MeasureCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(LabCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(ReviewCommand.Create(connectionOption, jsonOption));
+        rootCommand.Subcommands.Add(FocusCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(OuraCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(WalletCommand.Create(connectionOption, jsonOption));
         rootCommand.Subcommands.Add(LedgerCommand.Create(connectionOption, jsonOption));

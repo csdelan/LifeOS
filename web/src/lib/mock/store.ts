@@ -706,7 +706,6 @@ function retitle(id: string, title: string) {
     subjectTitle: a.subjectId === id ? title : a.subjectTitle,
     personName: a.personId === id ? title : a.personName,
   }));
-  if (state.primaryFocus.subjectId === id) state.primaryFocus = { ...state.primaryFocus, title };
 }
 
 /**

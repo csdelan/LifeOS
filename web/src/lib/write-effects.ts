@@ -38,6 +38,7 @@ import type {
 import { qk } from "@/lib/query-keys";
 import { measurementEffects } from "@/lib/features/measurements/writes";
 import { peopleEffects } from "@/lib/features/people/writes";
+import { focusEffects } from "@/lib/features/focus/writes";
 import { redemptionMessage } from "@/lib/rewards";
 
 type Writes = LifeOsWriteClient;
@@ -135,6 +136,7 @@ const photoMoves = () => [qk.environment];
 export const writeEffects: { [K in Name]: Effect<K> } = {
   ...measurementEffects,
   ...peopleEffects,
+  ...focusEffects,
   newSubject: {
     says: (created) => `Created ${created.title}`,
     // Made under a parent, it's on the parent's Relationships tab too (a replacement Decision's original).

@@ -30,7 +30,7 @@ describe("deriveDashboard's primary focus cover (COVER-3)", () => {
     const chosen = deriveDashboard({
       ...base,
       subjects,
-      primaryFocus: { title: "Ship", subjectId: "g", kind: "goal" },
+      focusChoice: { goalId: "g", chosenAt: "2026-10-20T20:00:00Z", chosenIn: "Weekly review" },
     });
     expect(chosen.primaryFocus.cover).toBe(cover);
   });
@@ -38,6 +38,53 @@ describe("deriveDashboard's primary focus cover (COVER-3)", () => {
   it("has none for a focus without a cover, or with no goal at all", () => {
     expect(deriveDashboard({ ...base, subjects: [item("g", "Goal", "Ship", { status: "Active" })] }).primaryFocus.cover).toBeNull();
     expect(deriveDashboard({ ...base, subjects: [] }).primaryFocus).toMatchObject({ subjectId: "", cover: null });
+  });
+});
+
+describe("deriveDashboard's Primary focus (TODAY-1, D6, focus plan G1)", () => {
+  const base = { edges: [], inboxCount: 0, habits: [], occurrences: [], today: "2026-10-23" };
+  const goals = [
+    item("soon", "Goal", "Sleep through the night", { status: "Active", targetDate: "2026-11-01" }),
+    item("later", "Goal", "Ship LifeOS", { status: "Active", targetDate: "2026-12-01" }),
+    item("done", "Goal", "Run a half", { status: "Completed", targetDate: "2026-10-01" }),
+  ];
+  const chose = (goalId: string | null) => ({
+    focusChoice: { goalId, chosenAt: "2026-10-20T20:00:00Z", chosenIn: "Weekly review, Sun Oct 18" },
+  });
+
+  it("suggests the Active Goal with the nearest target date while none is chosen", () => {
+    expect(deriveDashboard({ ...base, subjects: goals }).primaryFocus).toMatchObject({
+      subjectId: "soon",
+      chosen: false,
+      chosenAt: null,
+      lapsedTitle: null,
+    });
+  });
+
+  it("leads with the chosen Goal over the date rule, and says where it was chosen", () => {
+    expect(deriveDashboard({ ...base, subjects: goals, ...chose("later") }).primaryFocus).toMatchObject({
+      subjectId: "later",
+      chosen: true,
+      chosenIn: "Weekly review, Sun Oct 18",
+      lapsedTitle: null,
+    });
+  });
+
+  it("suggests again once the chosen Goal ends, naming it", () => {
+    expect(deriveDashboard({ ...base, subjects: goals, ...chose("done") }).primaryFocus).toMatchObject({
+      subjectId: "soon",
+      chosen: false,
+      lapsedTitle: "Run a half",
+      lapsedAs: "Completed",
+    });
+  });
+
+  it("suggests when No focus was chosen", () => {
+    expect(deriveDashboard({ ...base, subjects: goals, ...chose(null) }).primaryFocus).toMatchObject({
+      subjectId: "soon",
+      chosen: false,
+      lapsedTitle: null,
+    });
   });
 });
 

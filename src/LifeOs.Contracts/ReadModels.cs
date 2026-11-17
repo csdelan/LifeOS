@@ -376,7 +376,10 @@ public sealed class HabitDay
 /// <summary>The Focus page (<c>GET /api/focus</c>), worked out by <c>FocusReader</c>.</summary>
 public sealed class DashboardRead
 {
-    /// <summary>The Active goal with the nearest target date, or a stand-in with no subject when there is none.</summary>
+    /// <summary>
+    /// The Goal Chris chose in a review (focus plan G1), while it's Active; otherwise the Active goal
+    /// with the nearest target date, as a suggestion; or a stand-in with no subject when there is none.
+    /// </summary>
     public required FocusGoal PrimaryFocus { get; set; }
 
     /// <summary>Up to three Active projects that result in the focus, or any Active ones when none do.</summary>
@@ -411,6 +414,21 @@ public sealed class FocusGoal
     public required string SubjectId { get; set; }
     public required string Kind { get; set; }
     public CoverRead? Cover { get; set; }
+
+    /// <summary>Chris chose it (TODAY-1: told apart from a suggestion); false for the nearest-target-date suggestion or the stand-in.</summary>
+    public required bool Chosen { get; set; }
+
+    /// <summary>When he chose it; null unless <see cref="Chosen"/>.</summary>
+    public required DateTimeOffset? ChosenAt { get; set; }
+
+    /// <summary>The review he chose it in ("Weekly review, Sun Nov 22"); null unless chosen in one.</summary>
+    public required string? ChosenIn { get; set; }
+
+    /// <summary>A Goal he chose that is no longer Active or was archived, so isn't the focus now; null otherwise.</summary>
+    public required string? LapsedTitle { get; set; }
+
+    /// <summary>What <see cref="LapsedTitle"/> reads as now: its status (Completed, Abandoned, ...) or Archived.</summary>
+    public required string? LapsedAs { get; set; }
 }
 
 public sealed class FocusObjective

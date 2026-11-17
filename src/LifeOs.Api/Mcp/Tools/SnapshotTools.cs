@@ -15,7 +15,9 @@ public sealed class SnapshotTools(SubjectReader subjects, FocusReader focus, Rew
 
     [McpServerTool(Name = "life_snapshot", Title = "Life snapshot", ReadOnly = true, Idempotent = true, OpenWorld = false, Destructive = false)]
     [Description("""
-        Start here. Chris's life as it stands today: his identity statements, areas, open goals
+        Start here. Chris's life as it stands today: his identity statements, areas, his Primary
+        focus (the Active goal he chose in a review, or, when "chosen" is false, the one with the
+        nearest target date as a suggestion), open goals
         and projects (not Completed or Abandoned; Active first, each with its status, which may
         not be set) with what each serves, tasks due today or overdue, tasks in progress, habits
         due today with streaks, appointments in the next 7 days, the inbox count, running timers,
@@ -61,6 +63,8 @@ public sealed class SnapshotTools(SubjectReader subjects, FocusReader focus, Rew
             .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase);
         var openGoals = Open(SubjectTypes.Goal).ToList();
         var openProjects = Open(SubjectTypes.Project).ToList();
+        var pick = await focus.PrimaryAsync(
+            [.. openGoals.Where(s => FocusReader.Is(s.Status, "Active"))], cancellationToken);
         serves = (await subjects.GetAlignmentTargetsAsync(
                 [.. openGoals.Select(s => s.Id), .. openProjects.Select(s => s.Id)], AlignmentForest.Relations, cancellationToken))
             .Where(t => options.AllowsType(t.Type))
@@ -113,6 +117,14 @@ public sealed class SnapshotTools(SubjectReader subjects, FocusReader focus, Rew
         {
             IdentityStatements = Section("identity_statements", values.Select(s => new { s.Id, s.Urn, s.Title })),
             Areas = Section("areas", (await subjects.GetAreasAsync(cancellationToken: cancellationToken)).Select(a => new { a.Id, a.Urn, a.Name })),
+            PrimaryFocus = pick.Goal is { } goal
+                ? new
+                {
+                    goal.Id, goal.Urn, goal.Title, goal.TargetDate,
+                    Chosen = pick.Chosen,
+                    ChosenIn = pick.Chosen ? pick.Choice?.ReviewTitle : null,
+                }
+                : null,
             OpenGoals = Section("open_goals", openGoals.Select(WithServes)),
             OpenProjects = Section("open_projects", openProjects.Select(WithServes)),
             DueAndOverdue = Section("due_and_overdue", due.Select(s => ItemRef.From(s) with

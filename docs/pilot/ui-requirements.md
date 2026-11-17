@@ -367,6 +367,13 @@ events until you change it, with the date rule as a labelled suggestion when non
 open decisions above are settled there: events, not a Season or a setting, and Goal-linked, not
 free text. Daily objectives stay later.
 
+**Update (2026-11-17 — built, [focus plan](focus-plan.md) G1):** turning *Keep focus* off in a
+daily or weekly review offers the Active Goals and *No focus*; saving makes the Goal the
+Primary focus until a review changes it. Focus says "Chosen in your weekly review, Sun Nov 22."
+or, with none chosen or the chosen Goal ended, "Suggested: the Active Goal with the nearest target
+date.", and says when a chosen focus has ended. `bsk focus` sets it too, and `life_snapshot`
+shows it.
+
 
 ### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
 Horizon:    Pilot
@@ -5043,7 +5050,9 @@ gathered at the end.
   migration 0054).
 - **D6 focus storage** (TODAY-1) — current Monthly + Weekly Primary-focus Goal pointers with
   change history (focus-set events or a lightweight Season); daily objectives stay app-local,
-  materializing into Inbox items only when unfinished. — **Open**.
+  materializing into Inbox items only when unfinished. — The weekly focus is **Shipped**
+  (focus-set events, migration 0074, [focus plan](focus-plan.md) G1); the monthly one waits for
+  monthly reviews, and daily objectives are later.
 - **Materialized recurring occurrences** (CAL-1 / D10) — each Appointment occurrence is its own
   status-bearing record (unlike Habit's *projected* occurrences). — **Shipped** (Phase 12, migration 0020, `bsk materialize`).
 - **People-association link** — a non-alignment way to attach a `Person` (involves / attendee /
@@ -5138,7 +5147,7 @@ gathered at the end.
   `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
 
-**Still open:** **D6 focus storage** (TODAY-1, planned in [focus-plan.md](focus-plan.md)), and Measurements' **M5** (Compare,
+**Still open:** D6's **monthly focus** (TODAY-1; the weekly one shipped in [focus-plan.md](focus-plan.md) G1), and Measurements' **M5** (Compare,
 MEASURE-5) and **M6** (the `health` tool, MEASURE-6). The Review type, scheduling and missed
 shipped in migration 0052 (REVIEW-0 / D8), and a review's answers are the vault reflection it
 links to (reviews plan §4.1, R5, migration 0054). Everything else above has shipped. The

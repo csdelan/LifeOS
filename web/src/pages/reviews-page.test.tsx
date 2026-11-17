@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReviewDoc } from "@/lib/production-ui-types";
+import type { ReviewDoc, SubjectListItem } from "@/lib/production-ui-types";
+import type { DashboardRead } from "@/lib/reads";
 import { ReviewsPage } from "@/pages/reviews-page";
 
 // Monday 9 November 2026: the review shown is the daily one for that day, already open.
@@ -30,6 +31,9 @@ function review(extra: Partial<ReviewDoc> = {}): ReviewDoc {
 }
 
 let reviews: ReviewDoc[] = [];
+let dashboard: DashboardRead | undefined;
+const saveReview = vi.fn((_id: string, _body: { keepFocus: boolean }) => Promise.resolve());
+const setPrimaryFocus = vi.fn((_goalId: string | null, _reviewId?: string) => Promise.resolve({ written: true }));
 
 vi.mock("@/lib/dates", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/dates")>()),
@@ -40,11 +44,12 @@ vi.mock("@/lib/queries", () => ({
   useReviews: () => ({ data: reviews, isLoading: false, isError: false }),
   useWrites: () => ({
     openReview: vi.fn(() => Promise.resolve()),
-    saveReview: vi.fn(() => Promise.resolve()),
+    saveReview,
+    setPrimaryFocus,
     completeReview: vi.fn(() => Promise.resolve()),
     adhere: vi.fn(),
   }),
-  useDashboard: () => ({ data: undefined }),
+  useDashboard: () => ({ data: dashboard }),
   useRecap: () => ({ data: [], isLoading: false, isError: false }),
   useHabits: () => ({ data: [], isLoading: false, isError: false }),
   useOccurrencesBetween: () => ({ data: [], isLoading: false, isError: false }),
@@ -105,5 +110,76 @@ describe("ReviewsPage reflection (reviews plan §4.1)", () => {
     );
     expect(screen.getByRole("button", { name: "Dictate more" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Complete review" })).toBeTruthy();
+  });
+});
+
+function goal(id: string, title: string, targetDate: string): SubjectListItem {
+  return {
+    id,
+    urn: `urn:bsk:goal:${id}`,
+    type: "Goal",
+    title,
+    status: "Active",
+    archived: false,
+    targetDate,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  };
+}
+
+describe("ReviewsPage's Primary focus (TODAY-1, D6, focus plan G1)", () => {
+  beforeEach(() => {
+    reviews = [review()];
+    saveReview.mockClear();
+    setPrimaryFocus.mockClear();
+    const sleep = goal("g-sleep", "Sleep through the night", "2026-11-20");
+    dashboard = {
+      primaryFocus: {
+        title: sleep.title,
+        subjectId: sleep.id,
+        kind: "goal",
+        chosen: false,
+        chosenAt: null,
+        chosenIn: null,
+        lapsedTitle: null,
+        lapsedAs: null,
+      },
+      objectives: [],
+      dueAndOverdue: [],
+      nextActions: [],
+      inboxCount: 0,
+      todayHabits: [],
+      maintainingHabits: [],
+      activeGoals: [sleep, goal("g-ship", "Ship LifeOS", "2026-12-20")],
+      activeProjects: [],
+    };
+  });
+
+  async function chooseFocus(name: string) {
+    render(<ReviewsPage />);
+    expect(screen.getByText("Suggested: the Active Goal with the nearest target date.")).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "New focus" })).toBeNull();
+    await userEvent.click(screen.getByRole("switch", { name: "Keep primary focus" }));
+    await userEvent.click(screen.getByRole("combobox", { name: "New focus" }));
+    await userEvent.click(await screen.findByRole("option", { name: name }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  }
+
+  it("makes the Goal picked with Keep focus off the focus, chosen in this review", async () => {
+    await chooseFocus("Ship LifeOS · by Dec 20");
+    await waitFor(() => expect(setPrimaryFocus).toHaveBeenCalledWith("g-ship", "review-1"));
+    expect(saveReview).not.toHaveBeenCalled();
+  });
+
+  it("chooses no focus, which lets Focus suggest one", async () => {
+    await chooseFocus("No focus");
+    await waitFor(() => expect(setPrimaryFocus).toHaveBeenCalledWith(null, "review-1"));
+  });
+
+  it("saves only the switch when Keep focus is off and nothing is picked", async () => {
+    render(<ReviewsPage />);
+    await userEvent.click(screen.getByRole("switch", { name: "Keep primary focus" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(saveReview).toHaveBeenCalledWith("review-1", { keepFocus: false }));
+    expect(setPrimaryFocus).not.toHaveBeenCalled();
   });
 });

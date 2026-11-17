@@ -562,6 +562,25 @@ SELECT pg_temp.u('status:review:' || id), 'state_change', t + interval '21 hours
        jsonb_build_object('status', 'Completed', 'subject_id', id::text)
 FROM review WHERE pg_temp.r('review-done:' || id) < 0.85;
 
+-- The Primary focus (focus plan G1): about two in five weekly reviews choose the newest Goal made
+-- by then, and turn the review's Keep focus off.
+CREATE TEMP TABLE focus AS
+SELECT pg_temp.u('focus:' || r.id) AS id, r.id AS review_id, r.t,
+       pg_temp.u('goal:' || least(15, greatest(1, (r.day - (current_date - 1095)) / 70))) AS goal_id
+FROM review r WHERE r.kind = 'weekly' AND pg_temp.r('focus:' || r.id) < 0.4;
+
+INSERT INTO ev (id, kind, occurred_at, recorded_at, payload)
+SELECT id, 'note', t + interval '20 hours 45 minutes', t + interval '20 hours 45 minutes',
+       jsonb_build_object('focus', jsonb_build_object('level', 'weekly', 'goal_id', goal_id::text, 'review_id', review_id::text))
+FROM focus;
+
+INSERT INTO edge (event_id, subject_id, relation)
+SELECT id, goal_id, 'concerns' FROM focus
+UNION ALL
+SELECT id, review_id, 'concerns' FROM focus;
+
+UPDATE bsk.subject SET attributes = attributes || '{"keep_focus": false}' WHERE id IN (SELECT review_id FROM focus);
+
 -- ---------------------------------------------------------------- the reward catalog
 
 INSERT INTO bsk.subject (id, urn, type, title, attributes, created_at)

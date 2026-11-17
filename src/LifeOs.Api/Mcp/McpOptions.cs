@@ -235,13 +235,13 @@ public static class McpAreas
 
     /// <summary>
     /// Every payload key the core's own writes use: status, archive, triage and attribute changes,
-    /// timers, habit check-offs, activity text, idea sessions, review reflections, an agent's
-    /// Person and a Person's photo. A capture's payload is empty.
+    /// timers, habit check-offs, activity text, idea sessions, review reflections, the Primary
+    /// focus, an agent's Person and a Person's photo. A capture's payload is empty.
     /// </summary>
     public static readonly IReadOnlyList<string> CorePayloadKeys =
     [
         "subject_id", "status", "archived", "timer", "item_kind", "item_id", "state", "title", "attributes",
-        "occurrence", "result", "note", "text", "problem", "ideas", ReviewReflections.PayloadKey, AgentWrites.PersonField,
-        PersonPhotoService.PayloadKey,
+        "occurrence", "result", "note", "text", "problem", "ideas", ReviewReflections.PayloadKey, PrimaryFocus.PayloadKey,
+        AgentWrites.PersonField, PersonPhotoService.PayloadKey,
     ];
 }

@@ -1764,6 +1764,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/focus/primary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SetPrimaryFocus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/artifacts/{id}": {
         parameters: {
             query?: never;
@@ -2988,11 +3004,32 @@ export interface components {
             /** Format: double */
             drag: number;
         };
+        FocusChoiceRow: {
+            level: string;
+            /** Format: uuid */
+            goalId?: null | string;
+            goalUrn?: null | string;
+            goalTitle?: null | string;
+            holds: boolean;
+            lapsedAs?: null | string;
+            /** Format: uuid */
+            reviewId?: null | string;
+            reviewTitle?: null | string;
+            /** Format: date-time */
+            chosenAt?: null | string;
+            written: boolean;
+        };
         FocusGoal: {
             title: string;
             subjectId: string;
             kind: string;
             cover?: null | components["schemas"]["CoverRead"];
+            chosen: boolean;
+            /** Format: date-time */
+            chosenAt: null | string;
+            chosenIn: null | string;
+            lapsedTitle: null | string;
+            lapsedAs: null | string;
         };
         FocusObjective: {
             /** Format: uuid */
@@ -3851,6 +3888,12 @@ export interface components {
             attrs?: {
                 [key: string]: string;
             };
+        };
+        SetPrimaryFocusBody: {
+            /** Format: uuid */
+            goalId?: null | string;
+            /** Format: uuid */
+            reviewId?: null | string;
         };
         SleepPeriodRow: {
             id?: string;
@@ -7956,6 +7999,48 @@ export interface operations {
             };
             /** @description Bad Request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetPrimaryFocus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetPrimaryFocusBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FocusChoiceRow"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

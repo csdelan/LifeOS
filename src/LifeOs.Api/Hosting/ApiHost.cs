@@ -179,6 +179,7 @@ public static class ApiHost
         app.MapEnvironmentEndpoints();
         app.MapMeasurementEndpoints();
         app.MapReviewEndpoints();
+        app.MapFocusEndpoints();
         app.MapArtifactEndpoints();
         app.MapOuraEndpoints();
         app.MapActivityEndpoints();

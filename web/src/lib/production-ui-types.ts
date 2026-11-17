@@ -18,6 +18,7 @@
 import type { components } from "@/api/schema";
 import type { MeasurementWrites } from "@/lib/features/measurements/writes";
 import type { PeopleWrites } from "@/lib/features/people/writes";
+import type { FocusWrites } from "@/lib/features/focus/writes";
 
 /** The API's generated type for the schema named `N` (`src/api/schema.d.ts`). */
 export type ApiSchema<N extends keyof components["schemas"]> = components["schemas"][N];
@@ -1926,7 +1927,7 @@ export interface HomeDaysRead {
  * The write client the UI calls. Every method maps to a bsk verb / API endpoint.
  * Mock all of these for the first pass; return shapes match the real API.
  */
-export interface LifeOsWriteClient extends MeasurementWrites, PeopleWrites {
+export interface LifeOsWriteClient extends MeasurementWrites, PeopleWrites, FocusWrites {
   newSubject(req: NewSubjectRequest): Promise<CreatedSubject>;
   /** source = event id (capture→subject) or subject ref (Idea→work via results_in). */
   promote(source: string, type: SubjectType, title: string): Promise<CreatedSubject>;

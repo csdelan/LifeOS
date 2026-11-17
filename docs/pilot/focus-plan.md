@@ -47,12 +47,12 @@ Chris would have to date it ahead of every other Goal.
 ### 2.1 The focus is an event
 
 - Choosing a focus writes a `note` event with the payload
-  `{"focus": {"level": "weekly", "goal_id": "<uuid>" | null}}`. It `concerns` the Goal and, when
+  `{"focus": {"level": "weekly", "goal_id": "<uuid>" | null, "review_id": "<uuid>" | null}}`. It `concerns` the Goal and, when
   chosen in a review, the Review. A null `goal_id` is *No focus*. The source is the door's, and
   the newest by `recorded_at` wins, so every change stays in the log (D6: "record changes as
   events so history falls out of the append-only log").
-- `bsk.v_focus`: the newest focus per level (`level`, `goal_id`, `review_id`, `set_at`,
-  `event_id`), reading `goal_id` through `bsk.is_uuid_text` (`CastGuardTests`).
+- `bsk.v_focus` (migration 0074): the newest focus per level (`level`, `goal_id`, `review_id`,
+  `chosen_at`, `event_id`), reading the ids through `bsk.is_uuid_text` (`CastGuardTests`).
 - `event_focus_idx` on `((payload->'focus'->>'level'), recorded_at)` where `kind = 'note' AND
   jsonb_exists(payload, 'focus')`, with its read in `EventIndexTests`. The view ends with
   `level` as text, its partition key.
@@ -64,13 +64,16 @@ Chris would have to date it ahead of every other Goal.
 
 ### 2.2 Service, reads and doors
 
-- `FocusService` (Application/Focus): `SetAsync(goalId?, reviewId?)` refuses a Goal that
-  isn't Active or is archived, in words, as a `KernelRefusalException`; choosing the focus
-  you already have writes nothing.
-- `FocusReader.DashboardAsync` reads `v_focus` first. `primaryFocus` gains `chosen` (true when
-  you chose it), `setAt`, `reviewId`, and `ended` (the title of a chosen Goal that has since
-  ended, else null).
-- `bsk focus show | set <goal> | clear`, with `--json` in the API's shape (`BskJsonTests`).
+- `FocusService` (Application/Focus): `SetAsync(goal?, reviewId?)` refuses anything but an
+  Active, unarchived Goal, in words (a 400; an id that matches nothing is a 404); choosing the
+  focus you already have writes nothing. Chosen in a review, it turns that review's
+  `keep_focus` off.
+- `FocusReader.PrimaryAsync` reads `v_focus` first, for Focus and `life_snapshot`.
+  `primaryFocus` gains `chosen` (true when you chose it), `chosenAt`, `chosenIn` (the review's
+  title, "Weekly review, Sun Nov 22"), and `lapsedTitle` and `lapsedAs` (a chosen Goal that has
+  since ended, and how: Completed, Abandoned, Archived).
+- `bsk focus [show] | set <goal> [--review <id>] | clear`, with `--json` in the API's shape
+  (`FocusChoiceRow`, `BskJsonTests`).
 - `POST /api/focus/primary {goalId: uuid | null, reviewId?}`, through `KernelRefusals`.
   Regenerate the web client.
 - `/mcp`'s `life_snapshot` adds the focus Goal (it reads `FocusReader.DayAsync` today, which has
@@ -81,11 +84,15 @@ Chris would have to date it ahead of every other Goal.
 - `lib/features/focus/` holds the focus's types, reads, writes, effects and query keys, and
   `lib/mock/focus-store.ts` its mock (the `features/measurements` pattern).
 - The review's Primary focus card shows the focus and whether you chose it or it's suggested.
-  Turning *Keep focus* off shows a `SubjectSearchCombobox` over Active Goals, with *No focus*.
-  Save writes the focus, then `keep_focus`. Its `writeEffects` entry refreshes Focus and the
-  review.
-- The Focus page's card says "Chosen in your review of Sun Nov 22" or "Suggested: the nearest
-  target date", says when a chosen focus has ended, and links to today's review to change it.
+  Turning *Keep focus* off shows a picker of the Active Goals Focus already reads, with their
+  target dates, and *No focus*. (Not a `SubjectSearchCombobox`: it lists nothing until you type
+  and can't keep to Active Goals, and there are only a handful.) Save chooses the focus, and the
+  kernel turns the review's `keep_focus` off; off with nothing picked saves the switch alone.
+  Its `writeEffects` entry refreshes Focus and the reviews.
+- The Focus page's card says "Chosen in your weekly review, Sun Nov 22." or "Suggested: the
+  Active Goal with the nearest target date.", says when a chosen focus has ended ("Your focus,
+  Run a half-marathon, is completed."), and links to Reviews, which opens today's review, to
+  change it. `lib/features/focus/describe.ts` says both, for both pages.
 
 ## 3. Sub-goals (G2)
 
@@ -132,6 +139,9 @@ Chris would have to date it ahead of every other Goal.
   focus reads as none; *No focus* clears it; the Focus page links to the review rather than
   holding its own picker; a `note` event concerning the Goal and the Review; a sub-goal's later
   date warns; loops refused in the kernel; Focus's projects drawn from the sub-goals too.
+- **Built (G1, 2026-11-17):** the review's picker is a short list of the Active Goals rather
+  than the server search (§2.3). Choosing the focus you already have writes nothing and leaves
+  the review's switch as it was, since the focus was kept.
 
 ## 6. Later
 
@@ -146,6 +156,6 @@ Chris would have to date it ahead of every other Goal.
 
 ## Status
 
-- [ ] G0 — This plan
-- [ ] G1 — A Primary focus you choose
+- [x] G0 — This plan
+- [x] G1 — A Primary focus you choose (migration 0074)
 - [ ] G2 — Sub-goals

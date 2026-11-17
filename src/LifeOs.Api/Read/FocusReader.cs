@@ -9,7 +9,7 @@ namespace LifeOs.Api.Read;
 /// worked out once. The web had put Focus together itself from five reads, every subject and every
 /// edge among them, with its own copy of these rules.
 /// </summary>
-public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
+public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar, IFocusRepository chosen)
 {
     /// <summary>How many In progress Tasks Focus offers as next actions.</summary>
     public const int NextActionLimit = 4;
@@ -75,12 +75,10 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
         var goals = Active(SubjectTypes.Goal);
         var projects = Active(SubjectTypes.Project);
 
-        // The goal with the nearest target date leads; the projects that result in it are its
-        // objectives, or any Active ones when none do.
-        var primary = goals
-            .OrderBy(s => s.TargetDate ?? "9999", StringComparer.Ordinal)
-            .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
+        // The goal Chris chose leads, or the one with the nearest target date; the projects that
+        // result in it are its objectives, or any Active ones when none do.
+        var pick = await PrimaryAsync(goals, cancellationToken);
+        var primary = pick.Goal;
         var serving = primary is null
             ? []
             : (await subjects.GetAlignmentTargetsAsync(
@@ -90,15 +88,21 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
                 .ToHashSet();
         var objectives = projects.Where(p => serving.Contains(p.Id)).ToList();
 
+        var lapsed = pick.Choice is { Lapsed: true } l ? l : null;
         return new DashboardRead
         {
-            PrimaryFocus = primary is null
-                ? new FocusGoal { Title = "No active goal yet", SubjectId = "", Kind = "goal" }
-                : new FocusGoal
-                {
-                    Title = primary.Title, SubjectId = primary.Id.ToString(), Kind = "goal",
-                    Cover = primary.Cover,
-                },
+            PrimaryFocus = new FocusGoal
+            {
+                Title = primary?.Title ?? "No active goal yet",
+                SubjectId = primary?.Id.ToString() ?? "",
+                Kind = "goal",
+                Cover = primary?.Cover,
+                Chosen = pick.Chosen,
+                ChosenAt = pick.Chosen ? pick.Choice!.ChosenAt : null,
+                ChosenIn = pick.Chosen ? pick.Choice!.ReviewTitle : null,
+                LapsedTitle = lapsed?.GoalTitle,
+                LapsedAs = lapsed?.LapsedAs,
+            },
             Objectives =
             [
                 .. (objectives.Count > 0 ? objectives : projects)
@@ -113,6 +117,28 @@ public sealed class FocusReader(SubjectReader subjects, IHomeCalendar calendar)
             ActiveGoals = goals,
             ActiveProjects = projects,
         };
+    }
+
+    /// <summary>
+    /// The Primary focus among <paramref name="activeGoals"/> (TODAY-1, D6, focus plan G1): the Goal
+    /// Chris last chose while it's still Active, else the one with the nearest target date (ties by
+    /// title), offered as a suggestion; null when there's no Active goal. <see cref="FocusPick.Choice"/>
+    /// is his last choice either way, so a lapsed one can be named.
+    /// </summary>
+    public async Task<FocusPick> PrimaryAsync(
+        IReadOnlyList<SubjectListItem> activeGoals, CancellationToken cancellationToken = default)
+    {
+        var choice = await chosen.GetAsync(PrimaryFocus.Weekly, cancellationToken);
+        if (choice is { Holds: true, GoalId: { } id } && activeGoals.FirstOrDefault(g => g.Id == id) is { } held)
+        {
+            return new FocusPick(held, Chosen: true, choice);
+        }
+
+        var suggested = activeGoals
+            .OrderBy(s => s.TargetDate ?? "9999", StringComparer.Ordinal)
+            .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        return new FocusPick(suggested, Chosen: false, choice);
     }
 
     /// <summary>A habit being built: tracked, not Planned, not yet Established or Abandoned.</summary>
@@ -145,3 +171,9 @@ public sealed record FocusDay(
 
 /// <summary>A tracked habit and its day.</summary>
 public sealed record FocusHabit(HabitRow Habit, HabitDay Day);
+
+/// <summary>
+/// The Primary focus: the Goal (null when there's no Active goal), whether Chris chose it or it's
+/// the suggestion, and his last choice, if he ever made one.
+/// </summary>
+public sealed record FocusPick(SubjectListItem? Goal, bool Chosen, ChosenFocus? Choice);

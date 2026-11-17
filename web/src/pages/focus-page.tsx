@@ -14,6 +14,7 @@ import { TodayAppointments } from "@/components/appointments/today-appointments"
 import { cn } from "@/lib/utils";
 import { useDashboard, useWrites } from "@/lib/queries";
 import { isOverdue, todayIso } from "@/lib/dates";
+import { focusWords } from "@/lib/features/focus/describe";
 import { habitDayLabel } from "@/lib/habit-days";
 import { isTerminal } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
@@ -50,6 +51,7 @@ export function FocusPage() {
 
   const today = todayIso();
   const focusCover = data.primaryFocus.cover ?? null;
+  const focus = focusWords(data.primaryFocus);
   const overdue = data.dueAndOverdue.filter((t) => isOverdue(t.due, isTerminal(t.status), today));
   const dueToday = data.dueAndOverdue.filter((t) => !overdue.includes(t));
 
@@ -81,8 +83,12 @@ export function FocusPage() {
               <CardTitle className="font-heading text-3xl">
                 {data.primaryFocus.title}
               </CardTitle>
+              {focus.lapsed ? <p className="text-sm text-attention">{focus.lapsed}</p> : null}
               <CardDescription>
-                Manually set. Suggestions never silently replace this.
+                {focus.source ? `${focus.source} ` : null}
+                <Link to="/reviews" className="text-primary underline underline-offset-2">
+                  {data.primaryFocus.chosen ? "Change it in a review" : "Choose one in a review"}
+                </Link>
               </CardDescription>
             </CardHeader>
             <CardContent>

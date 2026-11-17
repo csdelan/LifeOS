@@ -2,6 +2,7 @@ using LifeOs.Application.Abstractions;
 using LifeOs.Application.Activity;
 using LifeOs.Application.Capture;
 using LifeOs.Application.Covers;
+using LifeOs.Application.Focus;
 using LifeOs.Application.Food;
 using LifeOs.Application.Home;
 using LifeOs.Application.Measurements;
@@ -92,6 +93,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISpaceRepository, NpgsqlSpaceRepository>();
         services.AddSingleton<IMetricRepository, NpgsqlMetricRepository>();
         services.AddSingleton<IReviewRepository, NpgsqlReviewRepository>();
+        services.AddSingleton<IFocusRepository, NpgsqlFocusRepository>();
         services.AddSingleton<IActivityRepository, NpgsqlActivityRepository>();
 
         // These take the home time zone or the token key.
@@ -232,6 +234,9 @@ public static class ServiceCollectionExtensions
         // Daily and weekly reviews (REVIEW-1, REVIEW-2) and their vault reflections (§4.1).
         services.AddSingleton<ReviewService>();
         services.AddSingleton<ReflectionService>();
+
+        // The Primary focus (TODAY-1, D6), chosen in a review.
+        services.AddSingleton<FocusService>();
 
         // Covers (D15) and Oura (D14): each takes an outside client that may not be set up.
         services.AddSingleton(sp => new CoverService(

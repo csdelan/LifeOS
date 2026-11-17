@@ -50,6 +50,8 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("one fast", $"SELECT * FROM bsk.v_fast WHERE fast_key = '{Id}';", "event_fast_idx", true),
         new("the meals during fasts", "SELECT * FROM bsk.v_fast;", "event_meal_idx", false),
         new("food days", "SELECT * FROM bsk.v_food_day;", "event_food_day_idx", false),
+        // Focus plan G1 (migration 0074): the Primary focus, by its level.
+        new("the Primary focus", "SELECT * FROM bsk.v_focus WHERE level = 'weekly';", "event_focus_idx", true),
         new("one kind over a time range",
             "SELECT id FROM bsk.event WHERE kind = 'note' AND occurred_at >= now() - interval '7 days' ORDER BY occurred_at DESC LIMIT 20;",
             "event_kind_occurred_idx", true),
@@ -151,6 +153,7 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         ["bsk.v_event"] = Bounded("the change feed"),
         ["bsk.v_exception_day"] = Whole("the domain fold reads every exception day, by design: a few a year"),
         ["bsk.v_fast"] = Bounded("one fast"),
+        ["bsk.v_focus"] = Bounded("the Primary focus"),
         ["bsk.v_food_day"] = Whole(
             "it groups every meal and fast, each folded by its id, by its day; a range of days needs a pre-select of "
             + "the range's meals and fasts (HotPathBudgetTests lists the Food Log week over budget)"),

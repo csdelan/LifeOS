@@ -8,6 +8,7 @@ import { isTerminal } from "@/lib/production-ui-types";
 import type { AlignmentEdge } from "@/lib/derive";
 import type { HabitOccurrenceRow, HabitRow, SubjectListItem } from "@/lib/production-ui-types";
 import type { DashboardRead } from "@/lib/reads";
+import { lapsedAs, type FocusChoiceInput } from "@/lib/mock/focus-store";
 
 export function deriveDashboard(input: {
   subjects: SubjectListItem[];
@@ -16,7 +17,8 @@ export function deriveDashboard(input: {
   habits: HabitRow[];
   occurrences: HabitOccurrenceRow[];
   today: string;
-  primaryFocus?: { title: string; subjectId: string; kind: "goal" };
+  /** The Primary focus as last chosen (focus plan G1), or null while none has been. */
+  focusChoice?: FocusChoiceInput | null;
   objectives?: DashboardRead["objectives"];
 }): DashboardRead {
   const { subjects, edges, inboxCount, habits, occurrences, today } = input;
@@ -41,12 +43,18 @@ export function deriveDashboard(input: {
     (x) => x.type === "Project" && x.status === "Active" && !x.archived,
   );
 
-  const primary =
+  // The Goal Chris chose leads while it's Active; else the one with the nearest target date,
+  // as a suggestion (TODAY-1, D6, focus plan G1).
+  const choice = input.focusChoice ?? null;
+  const held = choice?.goalId ? (activeGoals.find((g) => g.id === choice.goalId) ?? null) : null;
+  const lapsed = choice?.goalId && !held ? subjects.find((x) => x.id === choice.goalId) : undefined;
+  const suggested =
     [...activeGoals].sort(
       (a, b) =>
         (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") ||
         a.title.localeCompare(b.title),
     )[0] ?? null;
+  const primary = held ?? suggested;
 
   const childProjectIds = new Set(
     edges
@@ -58,16 +66,18 @@ export function deriveDashboard(input: {
     .slice(0, 3)
     .map((p) => ({ id: p.id, title: p.title, subjectId: p.id }));
 
-  // The mock lets its seed set the focus by hand, as the Pilot did.
-  const focus = input.primaryFocus ?? (primary
-    ? { title: primary.title, subjectId: primary.id, kind: "goal" as const }
-    : { title: "No active goal yet", subjectId: "", kind: "goal" as const });
-  const focusCover = focus.subjectId
-    ? (subjects.find((x) => x.id === focus.subjectId)?.cover ?? null)
-    : null;
-
   return {
-    primaryFocus: { ...focus, cover: focusCover },
+    primaryFocus: {
+      title: primary?.title ?? "No active goal yet",
+      subjectId: primary?.id ?? "",
+      kind: "goal",
+      cover: primary?.cover ?? null,
+      chosen: held !== null,
+      chosenAt: held ? choice!.chosenAt : null,
+      chosenIn: held ? choice!.chosenIn : null,
+      lapsedTitle: lapsed?.title ?? null,
+      lapsedAs: lapsed ? lapsedAs(lapsed) : null,
+    },
     objectives:
       input.objectives && input.objectives.length > 0 ? input.objectives : objectives,
     dueAndOverdue,

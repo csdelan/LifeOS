@@ -38,6 +38,12 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
 
+// Radix's Select asks for pointer capture as it opens, which jsdom doesn't have.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.releasePointerCapture = () => {};
+}
+
 if (typeof URL.createObjectURL !== "function") {
   const urls = new Map<string, Blob>();
   let n = 0;

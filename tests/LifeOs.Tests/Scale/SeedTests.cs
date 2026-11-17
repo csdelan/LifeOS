@@ -27,6 +27,8 @@ public sealed class SeedTests(PostgresFixture postgres)
         { "bsk.v_reward_due", 5_000 },
         { "bsk.v_space_rating", 1_000 },
         { "bsk.v_metric_reading", 1_000 },
+        // v_focus keeps one row, the newest choice; the stream is every choice ever made.
+        { "bsk.event WHERE kind = 'note' AND jsonb_exists(payload, 'focus')", 40 },
     };
 
     [Theory]

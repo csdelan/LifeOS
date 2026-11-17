@@ -1,32 +1,45 @@
 import { useEffect, useState } from "react";
 import { MicIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { VoiceCaptureDialog } from "@/components/create/voice-capture-dialog";
+import { formatDay } from "@/lib/dates";
+import { focusWords } from "@/lib/features/focus/describe";
 import { useDashboard } from "@/lib/queries";
 import { obsidianUrl, reviewDay, reviewSpan } from "@/lib/reviews";
 import type { ReviewBody, ReviewDoc } from "@/lib/production-ui-types";
 import { useWriteAction } from "@/lib/write-action";
 
+/** The picker's value for *No focus*; an Active Goal's is its id, and none picked yet is "". */
+const NO_FOCUS = "none";
+
 export function ReviewEditor({
   doc,
   onDirty,
   onSave,
+  onChooseFocus,
   onComplete,
 }: {
   doc: ReviewDoc;
   onDirty: (v: boolean) => void;
   onSave: (body: ReviewBody) => Promise<void>;
+  /** Makes a Goal the Primary focus, or none, in this review (focus plan G1). */
+  onChooseFocus: (goalId: string | null) => Promise<{ written: boolean }>;
   onComplete: () => Promise<void>;
 }) {
   // The page keys this by the review, so another review starts from its own choice.
   const [keepFocus, setKeepFocus] = useState(doc.keepFocus);
+  const [pick, setPick] = useState("");
   const saving = useWriteAction({ report: "toast" });
   const busy = saving.pending;
   const [dictating, setDictating] = useState(false);
   const { data: dash } = useDashboard();
 
-  const dirty = keepFocus !== doc.keepFocus;
+  // Keep focus off and a Goal (or No focus) picked: Save chooses it, and the kernel turns this
+  // review's Keep focus off. Off with nothing picked saves the switch alone, as it always has.
+  const choosing = !keepFocus && pick !== "";
+  const dirty = keepFocus !== doc.keepFocus || choosing;
 
   useEffect(() => {
     onDirty(dirty);
@@ -39,6 +52,17 @@ export function ReviewEditor({
   function run(steps: () => Promise<void>, failure: string) {
     void saving.run(steps, { fallback: failure, onDone: () => onDirty(false) });
   }
+
+  async function save() {
+    if (!choosing) return onSave(body);
+    const { written } = await onChooseFocus(pick === NO_FOCUS ? null : pick);
+    // Written, the review's Keep focus is off now; the focus already held, nothing changed.
+    setPick("");
+    setKeepFocus(written ? false : doc.keepFocus);
+  }
+
+  const focus = dash?.primaryFocus;
+  const words = focus ? focusWords(focus) : null;
 
   return (
     <div className="mt-8 space-y-8">
@@ -55,21 +79,51 @@ export function ReviewEditor({
 
       <section className="space-y-4">
         <h2 className="font-heading text-xl">Planning {reviewSpan(doc.planStart, doc.planEnd)}</h2>
-        <div data-tone="violet" className="surface flex items-center justify-between p-4">
-          <div>
-            <p className="type-scale-section text-attention">Primary focus</p>
-            <p className="font-heading text-xl">{dash?.primaryFocus.title ?? "—"}</p>
-            <p className="text-xs text-muted-foreground">Keeping it is an explicit choice.</p>
+        <div data-tone="violet" className="surface space-y-4 p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="type-scale-section text-attention">Primary focus</p>
+              <p className="font-heading text-xl">{focus?.title ?? "—"}</p>
+              {words?.lapsed ? <p className="text-xs text-attention">{words.lapsed}</p> : null}
+              <p className="text-xs text-muted-foreground">
+                {words?.source ?? "Keeping it is an explicit choice."}
+              </p>
+            </div>
+            <label className="flex min-h-11 shrink-0 items-center gap-2 text-sm md:min-h-0">
+              <Switch
+                id="keep-focus"
+                checked={keepFocus}
+                onCheckedChange={setKeepFocus}
+                aria-label="Keep primary focus"
+              />
+              Keep focus
+            </label>
           </div>
-          <label className="flex min-h-11 items-center gap-2 text-sm md:min-h-0">
-            <Switch
-              id="keep-focus"
-              checked={keepFocus}
-              onCheckedChange={setKeepFocus}
-              aria-label="Keep primary focus"
-            />
-            Keep focus
-          </label>
+          {keepFocus ? null : (
+            <div className="space-y-1.5">
+              <label htmlFor="new-focus" className="text-sm font-medium">
+                New focus
+              </label>
+              <Select value={pick} onValueChange={setPick}>
+                <SelectTrigger id="new-focus" className="w-full sm:w-96">
+                  <SelectValue placeholder="Choose an Active Goal" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(dash?.activeGoals ?? []).map((g) => (
+                    <SelectItem key={g.id} value={g.id}>
+                      {g.title}
+                      {g.targetDate ? ` · by ${formatDay(g.targetDate)}` : ""}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={NO_FOCUS}>No focus</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Save makes it the focus until a review changes it. With no focus, Focus suggests the
+                Active Goal with the nearest target date.
+              </p>
+            </div>
+          )}
         </div>
         {dash?.objectives.length ? (
           <ul className="space-y-1 text-sm">
@@ -84,7 +138,7 @@ export function ReviewEditor({
         <Button
           variant="outline"
           disabled={!dirty || busy}
-          onClick={() => run(() => onSave(body), "The review didn't save.")}
+          onClick={() => run(save, "The review didn't save.")}
         >
           Save
         </Button>
@@ -94,7 +148,7 @@ export function ReviewEditor({
             onClick={() =>
               run(
                 async () => {
-                  if (dirty) await onSave(body);
+                  if (dirty) await save();
                   await onComplete();
                 },
                 "The review didn't complete.",

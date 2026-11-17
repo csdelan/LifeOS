@@ -23,8 +23,9 @@ function row(name: string, occurrenceDate: string, listed = true): HabitDay {
 }
 
 // The rows' day in the browser: 9 pm on 20 October in Pacific time is already the 21st in UTC.
+const noChoice = { chosen: false, chosenAt: null, chosenIn: null, lapsedTitle: null, lapsedAs: null };
 const base: DashboardRead = {
-  primaryFocus: { title: "No active goal yet", subjectId: "", kind: "goal" },
+  primaryFocus: { title: "No active goal yet", subjectId: "", kind: "goal", ...noChoice },
   objectives: [],
   dueAndOverdue: [],
   nextActions: [],
@@ -120,6 +121,51 @@ function active(id: string, type: "Goal" | "Project", title: string, withCover?:
   };
 }
 
+describe("FocusPage's Primary focus (TODAY-1, D6, focus plan G1)", () => {
+  beforeEach(() => {
+    dashboard = base;
+  });
+
+  const card = () => screen.getByText("Primary focus").closest("[data-slot=card]") as HTMLElement;
+
+  it("says the focus was chosen, and in which review, with a way to change it", () => {
+    dashboard = {
+      ...base,
+      primaryFocus: {
+        title: "Ship LifeOS",
+        subjectId: "g1",
+        kind: "goal",
+        ...noChoice,
+        chosen: true,
+        chosenAt: "2026-11-15T20:00:00Z",
+        chosenIn: "Weekly review, Sun Nov 15",
+      },
+    };
+    render(<FocusPage />);
+    expect(card()).toHaveTextContent("Chosen in your weekly review, Sun Nov 15.");
+    expect(within(card()).getByRole("link", { name: "Change it in a review" })).toBeInTheDocument();
+    expect(card()).not.toHaveTextContent("Suggested");
+  });
+
+  it("calls the date rule's Goal a suggestion, and names a chosen one that has ended", () => {
+    dashboard = {
+      ...base,
+      primaryFocus: {
+        title: "Sleep through the night",
+        subjectId: "g2",
+        kind: "goal",
+        ...noChoice,
+        lapsedTitle: "Run a half-marathon",
+        lapsedAs: "Completed",
+      },
+    };
+    render(<FocusPage />);
+    expect(card()).toHaveTextContent("Your focus, Run a half-marathon, is completed.");
+    expect(card()).toHaveTextContent("Suggested: the Active Goal with the nearest target date.");
+    expect(within(card()).getByRole("link", { name: "Choose one in a review" })).toBeInTheDocument();
+  });
+});
+
 describe("FocusPage covers (COVER-3)", () => {
   beforeEach(() => {
     dashboard = base;
@@ -128,7 +174,7 @@ describe("FocusPage covers (COVER-3)", () => {
   it("runs the focus's cover across the top of its card, credited", () => {
     dashboard = {
       ...base,
-      primaryFocus: { title: "Ship LifeOS", subjectId: "g1", kind: "goal", cover: cover("Mina") },
+      primaryFocus: { title: "Ship LifeOS", subjectId: "g1", kind: "goal", cover: cover("Mina"), ...noChoice },
     };
     render(<FocusPage />);
     const card = screen.getByText("Primary focus").closest("[data-slot=card]")!;

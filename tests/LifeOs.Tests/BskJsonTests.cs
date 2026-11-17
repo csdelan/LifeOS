@@ -225,6 +225,19 @@ public sealed class BskJsonTests(PostgresFixture postgres)
 
         await Pair("review", ["review", "open", "daily"], "/api/reviews/open", new { kind = "daily", date = Iso(today.AddDays(-1)) });
 
+        // Each door chooses its own Active Goal as the Primary focus.
+        var goals = new List<string>();
+        foreach (var (title, bsk) in new[] { ("Bsk goal", true), ("Api goal", false) })
+        {
+            var goal = bsk
+                ? (await BskAsync(db, ["new", "goal", title, "--attr", $"target_date={Iso(today.AddDays(90))}"]))!["urn"]!.GetValue<string>()
+                : (await Api("/api/subjects", new { type = SubjectTypes.Goal, title, attrs = new Dictionary<string, string> { ["target_date"] = Iso(today.AddDays(90)) } }))!["id"]!.GetValue<string>();
+            await Api("/api/status", new { subject = goal, status = "Active" });
+            goals.Add(goal);
+        }
+
+        await Pair("focus", ["focus", "set", goals[0]], "/api/focus/primary", new { goalId = goals[1] });
+
         // A Person's photo goes up as a file to bsk and as multipart to the API.
         var bskFriend = (await BskAsync(db, ["new", "person", "Bsk friend"]))!["urn"]!.GetValue<string>();
         var apiFriend = (await Api("/api/subjects", new { type = SubjectTypes.Person, title = "Api friend" }))!["id"]!.GetValue<string>();
