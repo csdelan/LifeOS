@@ -4,13 +4,16 @@ import { expect, type Page } from "@playwright/test";
 // What more than one spec uses. The specs are split by feature (code review CR56) so two workers
 // can run them side by side: each test opens its own page, and the mock store lives in the page.
 
+/** The time `beforeActivityXp` fixes the page's clock at. A spec works out its days from this, not the real date. */
+export const ACTIVITY_XP_NOW = new Date("2026-10-21T12:00:00");
+
 /**
  * The mock pays activity XP from Oura from 2026-10-22 by the page's date (activity plan A9), and
  * the Food Log and Character pages ask for that sync on opening, so Health's numbers would move
  * with the real date. The paths that read them run on the day before activity XP started.
  */
 export async function beforeActivityXp(page: Page) {
-  await page.clock.install({ time: new Date("2026-10-21T12:00:00") });
+  await page.clock.install({ time: ACTIVITY_XP_NOW });
 }
 
 /** A 2400 x 1600 PNG, as a phone might take: the browser shrinks it to 1,200 px. */

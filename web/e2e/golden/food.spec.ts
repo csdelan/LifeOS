@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { beforeActivityXp, bigPng } from "../support";
+import { ACTIVITY_XP_NOW, beforeActivityXp, bigPng } from "../support";
 
 test.describe("golden paths: the Food Log", () => {
   test("Log food asks before it throws away what's typed (code review CR96)", async ({ page }) => {
@@ -189,9 +189,9 @@ test.describe("golden paths: the Food Log", () => {
 
     // The month view holds every seeded day (from six days back); two days back paid 46.
     await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Month" }).click();
-    const twoBack = new Date();
+    const twoBack = new Date(ACTIVITY_XP_NOW);
     twoBack.setDate(twoBack.getDate() - 2);
-    if (twoBack.getMonth() !== new Date().getMonth()) {
+    if (twoBack.getMonth() !== ACTIVITY_XP_NOW.getMonth()) {
       await page.getByRole("button", { name: "Previous month" }).click();
     }
     const day = page.getByRole("group", { name: "Diet XP each day" }).getByRole("button", { name: /: 46 Health XP paid \(39 base\)/ });

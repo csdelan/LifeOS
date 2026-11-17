@@ -649,4 +649,5 @@ built.
 
 - **2026-11-17** at 58a9e53: 6.6 (+0.1). [Review](../agents/quality-reviews/2026-11-17.md).
   Built: CR129 (a food, room-rating, exception-day or Oura-sync write answers pending when its
-  settle or rank-up fails after the commit).
+  settle or rank-up fails after the commit); CR130 (the Food Log golden spec counts its days from its
+  fixed clock, and no spec that fixes one reads the real date).
