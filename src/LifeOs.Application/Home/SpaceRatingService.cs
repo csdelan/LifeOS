@@ -31,7 +31,11 @@ public sealed record RatingEdit(
     string? Note = null);
 
 /// <summary>What a rating write left: the ratings as they now read (none after a delete) and what it paid or moved.</summary>
-public sealed record RatingWriteResult(IReadOnlyList<SpaceRating> Ratings, Earned Earned);
+public sealed record RatingWriteResult(IReadOnlyList<SpaceRating> Ratings, Earned Earned)
+{
+    /// <summary>The rating was written, but paying a rank-up it reached failed and is left to the catch-up.</summary>
+    public bool FollowUpsPending { get; init; }
+}
 
 /// <summary>Today in the home zone and the ratings among the last <see cref="Days"/>, newest first.</summary>
 public sealed record RatingList(DateOnly Today, int Days, IReadOnlyList<SpaceRating> Ratings);
@@ -133,7 +137,10 @@ public sealed class SpaceRatingService(
             .ToList();
         var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync(writes, ct), cancellationToken);
-        return new RatingWriteResult(await ReadAsync(planned.Select(p => p.Id), cancellationToken), earned);
+        return new RatingWriteResult(await ReadAsync(planned.Select(p => p.Id), cancellationToken), earned.Value)
+        {
+            FollowUpsPending = earned.Pending
+        };
     }
 
     /// <summary>
@@ -163,7 +170,10 @@ public sealed class SpaceRatingService(
             Declared(occurredAt, now, Payload(rating.Id, space.Id, on, t, c, a, note)), space.Id);
         var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync([write], ct), cancellationToken);
-        return new RatingWriteResult(await ReadAsync([rating.Id], cancellationToken), earned);
+        return new RatingWriteResult(await ReadAsync([rating.Id], cancellationToken), earned.Value)
+        {
+            FollowUpsPending = earned.Pending
+        };
     }
 
     /// <summary>Deletes a rating: a voided version, so the record keeps what it was.</summary>
@@ -178,7 +188,7 @@ public sealed class SpaceRatingService(
         var write = new SpaceRatingWrite(Declared(now, now, payload), rating.SpaceId);
         var earned = await rankUps.AroundAsync(
             async ct => await spaces.AppendRatingsAsync([write], ct), cancellationToken);
-        return new RatingWriteResult([], earned);
+        return new RatingWriteResult([], earned.Value) { FollowUpsPending = earned.Pending };
     }
 
     /// <summary>

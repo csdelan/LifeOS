@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using LifeOs.Application.Abstractions;
 using LifeOs.Application.Rewards;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Food;
@@ -21,7 +22,8 @@ namespace LifeOs.Application.Food;
 /// written. Days and wall-clock times are the home zone's.
 /// </summary>
 public sealed class FoodLogService(
-    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IArtifactBlobStore blobs, IClock clock, EventSource eventSource)
+    IFoodLogRepository food, FoodRewards rewards, FoodReads reads, IArtifactBlobStore blobs, IClock clock, EventSource eventSource,
+    AfterCommit afterCommit)
 {
     /// <summary>The widest range <see cref="GetDaysAsync"/> answers.</summary>
     public const int MaxRangeDays = FoodReads.MaxRangeDays;
@@ -562,15 +564,19 @@ public sealed class FoodLogService(
 
     /// <summary>
     /// A write's result, after settling the food days (food-log plan §3.4): every write
-    /// settles them all, so a day that closed itself pays the moment anything is logged.
+    /// settles them all, so a day that closed itself pays the moment anything is logged. The settle
+    /// runs after the write has committed, so one that fails is answered as pending, never thrown:
+    /// a throw would read as nothing written, and a retry would log the meal twice (code review
+    /// CR129). The catch-up and the next food write settle what it left.
     /// </summary>
     private async Task<FoodWriteResult> ResultAsync(
         string action, Meal? meal, Fast? fast, DateOnly? day, IReadOnlyList<DateOnly> days, Guid? cause,
         CancellationToken cancellationToken)
     {
         var touched = days.Distinct().Order().ToList();
-        var earned = await rewards.SettleAsync(cause, touched, cancellationToken);
-        return new FoodWriteResult(action, meal, fast, day, touched, earned);
+        var earned = await afterCommit.RunAsync(
+            "settling the food days", action, ct => rewards.SettleAsync(cause, touched, ct), Earned.Nothing);
+        return new FoodWriteResult(action, meal, fast, day, touched, earned.Value) { FollowUpsPending = earned.Pending };
     }
 
     /// <summary>An entry after its checks: trimmed, its time and day settled, its type known, a drink's score 1.</summary>
@@ -633,7 +639,11 @@ public static class FoodActions
 /// earned.
 /// </summary>
 public sealed record FoodWriteResult(
-    string Action, Meal? Meal, Fast? Fast, DateOnly? Day, IReadOnlyList<DateOnly> Days, Earned Earned);
+    string Action, Meal? Meal, Fast? Fast, DateOnly? Day, IReadOnlyList<DateOnly> Days, Earned Earned)
+{
+    /// <summary>The write landed, but settling the food days after it failed and is left to the catch-up.</summary>
+    public bool FollowUpsPending { get; init; }
+}
 
 /// <summary>
 /// One day of the Food Log: its entries (oldest first), the fasts that ended on it, the fast

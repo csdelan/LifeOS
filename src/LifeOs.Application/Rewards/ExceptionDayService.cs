@@ -6,7 +6,11 @@ using LifeOs.Domain;
 namespace LifeOs.Application.Rewards;
 
 /// <summary>What marking or unmarking a day did: the day as it now reads (null once unmarked) and what the change paid or moved.</summary>
-public sealed record ExceptionDayChange(ExceptionDay? Exception, Earned Earned);
+public sealed record ExceptionDayChange(ExceptionDay? Exception, Earned Earned)
+{
+    /// <summary>The change was written, but paying a rank-up it reached failed and is left to the catch-up.</summary>
+    public bool FollowUpsPending { get; init; }
+}
 
 /// <summary>Today's date in the home zone and the marked days among the last <see cref="Days"/>, newest first.</summary>
 public sealed record ExceptionDays(DateOnly Today, int Days, IReadOnlyList<ExceptionDay> Marked);
@@ -67,7 +71,10 @@ public sealed class ExceptionDayService(
 
         var earned = await rankUps.AroundAsync(
             ct => AppendAsync(new { day = Text(on), comment = text }, ct), cancellationToken);
-        return new ExceptionDayChange(await FindAsync(on, today, cancellationToken), earned);
+        return new ExceptionDayChange(await FindAsync(on, today, cancellationToken), earned.Value)
+        {
+            FollowUpsPending = earned.Pending
+        };
     }
 
     /// <summary>
@@ -84,7 +91,7 @@ public sealed class ExceptionDayService(
 
         var earned = await rankUps.AroundAsync(
             ct => AppendAsync(new { day = Text(day), voided = true }, ct), cancellationToken);
-        return new ExceptionDayChange(null, earned);
+        return new ExceptionDayChange(null, earned.Value) { FollowUpsPending = earned.Pending };
     }
 
     /// <summary>

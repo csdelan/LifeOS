@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 
 namespace LifeOs.Application.Rewards;
@@ -20,7 +21,8 @@ namespace LifeOs.Application.Rewards;
 /// </para>
 /// </summary>
 public sealed class RankUpService(
-    ILedgerRepository ledger, IDomainCreditReader credit, IClock clock, EventSource eventSource)
+    ILedgerRepository ledger, IDomainCreditReader credit, IClock clock, EventSource eventSource,
+    AfterCommit afterCommit)
 {
     // A payment that loses a race on a rank re-reads and tries again.
     private const int ReconcileAttempts = 3;
@@ -52,14 +54,20 @@ public sealed class RankUpService(
     /// Runs <paramref name="write"/>, a change to what the life-domain fold reads beside the
     /// ledger (an exception day, xp-domains plan §7.4.3), between two folds: any rank-up the
     /// change unlocks is paid, and each configured domain whose level or rank moved comes back,
-    /// as an earning write answers.
+    /// as an earning write answers. The re-read and the pay run after the write has committed, so
+    /// one that fails is answered as pending (<see cref="AfterCommit"/>), never thrown: the catch-up
+    /// and a settle pay the rank-up later (code review CR129).
     /// </summary>
-    public async Task<Earned> AroundAsync(
+    public async Task<FollowUp<Earned>> AroundAsync(
         Func<CancellationToken, Task> write, CancellationToken cancellationToken = default)
     {
         var before = await ReadAsync(cancellationToken);
         await write(cancellationToken);
-        return await PayAfterAsync(before, Folded(await credit.RereadBesideAsync(before.Credit, cancellationToken)), cancellationToken);
+        return await afterCommit.RunAsync(
+            "paying the rank-ups the change reached",
+            "the life domains",
+            async ct => await PayAfterAsync(before, Folded(await credit.RereadBesideAsync(before.Credit, ct)), ct),
+            Earned.Nothing);
     }
 
     /// <summary>

@@ -86,8 +86,9 @@ internal static class OuraCommand
             return Run(parseResult, connectionOption, jsonOption, async (services, asJson, ct) =>
             {
                 var from = fromText is null ? (DateOnly?)null : ParseDay(fromText);
-                var (result, earned) = await services.GetRequiredService<ActivitySyncService>().SyncAsync(
+                var settled = await services.GetRequiredService<ActivitySyncService>().SyncAsync(
                     new OuraSyncOptions(from, HistoryWindows: int.MaxValue), ct);
+                var (result, earned) = settled;
                 if (asJson)
                 {
                     Cli.WriteJson(new { sync = result, awards = earned.Awards.Select(RewardRows.From) });
@@ -112,6 +113,8 @@ internal static class OuraCommand
                 {
                     RewardOutput.WriteAwards(earned.Awards);
                 }
+
+                RewardOutput.WritePending(settled.FollowUpsPending);
             }, cancellationToken);
         });
         return command;

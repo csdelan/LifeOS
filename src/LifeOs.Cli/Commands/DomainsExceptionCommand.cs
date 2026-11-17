@@ -94,6 +94,7 @@ internal static class DomainsExceptionCommand
 
                 RewardOutput.WriteAwards(change.Earned.Awards);
                 RewardOutput.WriteProgress(change.Earned.Progress);
+                RewardOutput.WritePending(change.FollowUpsPending);
                 return 0;
             });
         });

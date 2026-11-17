@@ -167,6 +167,7 @@ internal static class RateCommand
 
                 RewardOutput.WriteAwards(result.Earned.Awards);
                 RewardOutput.WriteProgress(result.Earned.Progress);
+                RewardOutput.WritePending(result.FollowUpsPending);
                 return 0;
             });
         });

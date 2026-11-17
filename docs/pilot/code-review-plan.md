@@ -648,3 +648,5 @@ as CR<n> (nightly <date>)". Each night adds a bullet here with its score, its re
 built.
 
 - **2026-11-17** at 58a9e53: 6.6 (+0.1). [Review](../agents/quality-reviews/2026-11-17.md).
+  Built: CR129 (a food, room-rating, exception-day or Oura-sync write answers pending when its
+  settle or rank-up fails after the commit).

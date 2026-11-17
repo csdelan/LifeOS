@@ -1,6 +1,9 @@
 using System.Reflection;
 using Dapper;
 using LifeOs.Application.Abstractions;
+using LifeOs.Application.Food;
+using LifeOs.Application.Home;
+using LifeOs.Application.Rewards;
 using LifeOs.Application.Subjects;
 using LifeOs.Domain;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,6 +86,66 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
     }
 
     [Fact]
+    public async Task A_meal_whose_settle_fails_is_written_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+
+        ports.Fail(nameof(ILedgerRepository));
+        var result = await kernel.GetRequiredService<FoodLogService>().LogAsync(
+            new FoodEntryInput(Unique("Oatmeal"), 4, 300), cancellationToken: Ct);
+
+        Assert.True(result.FollowUpsPending);
+        Assert.Empty(result.Earned.Awards);
+        Assert.Equal("measurement", await KindOfMealAsync(result.Meal!.Id));
+        Assert.Equal(["settling the food days"], log.Failed);
+    }
+
+    [Fact]
+    public async Task A_room_rating_whose_rank_up_fails_is_written_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+        var space = await kernel.GetRequiredService<SpaceService>().AddAsync(Unique("Den"), 3, 3, Ct);
+
+        ports.Fail($"{nameof(IDomainCreditReader)}.{nameof(IDomainCreditReader.RereadBesideAsync)}");
+        var result = await kernel.GetRequiredService<SpaceRatingService>().RateAsync(
+            null, [new RatingInput(space.Name, 4, 3.5m, 4)], Ct);
+
+        Assert.True(result.FollowUpsPending);
+        Assert.Single(result.Ratings);
+        Assert.Equal(["paying the rank-ups the change reached"], log.Failed);
+    }
+
+    [Fact]
+    public async Task An_exception_day_whose_rank_up_fails_is_written_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+
+        ports.Fail($"{nameof(IDomainCreditReader)}.{nameof(IDomainCreditReader.RereadBesideAsync)}");
+        var result = await kernel.GetRequiredService<ExceptionDayService>().MarkAsync(null, Unique("Flu"), Ct);
+
+        Assert.True(result.FollowUpsPending);
+        Assert.NotNull(result.Exception);
+        Assert.Equal(["paying the rank-ups the change reached"], log.Failed);
+    }
+
+    /// <summary>
+    /// The class, not the cases above (code review CR129): every result in Application that answers
+    /// what a write earned also says whether what ran after its commit is pending, so a write that
+    /// pays after it commits is built through <see cref="AfterCommit"/> rather than throwing.
+    /// </summary>
+    [Fact]
+    public void Every_write_result_that_answers_what_it_earned_says_when_its_follow_ups_are_pending()
+    {
+        var missing = typeof(AfterCommit).Assembly.GetExportedTypes()
+            .Where(t => t.GetProperties().Any(p => p.PropertyType == typeof(Earned)))
+            .Where(t => t.GetProperty("FollowUpsPending")?.PropertyType != typeof(bool))
+            .Select(t => t.Name)
+            .ToList();
+
+        Assert.Empty(missing);
+    }
+
+    [Fact]
     public async Task With_nothing_failing_a_write_is_not_pending()
     {
         var (kernel, _, log) = Build();
@@ -101,6 +164,7 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         var services = classDb.Services();
         ports.Decorate<ILedgerRepository>(services);
         ports.Decorate<ITaskSeriesRepository>(services);
+        ports.Decorate<IDomainCreditReader>(services);
         services.AddSingleton<IFollowUpLog>(log);
         return (services.BuildServiceProvider(), ports, log);
     }
@@ -122,6 +186,14 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT kind FROM bsk.event WHERE id = @eventId;", new { eventId }, cancellationToken: Ct));
+    }
+
+    private async Task<string?> KindOfMealAsync(Guid mealId)
+    {
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT kind FROM bsk.event WHERE payload->'meal'->>'id' = @id;", new { id = mealId.ToString() }, cancellationToken: Ct));
     }
 
     private async Task<string?> AttributeAsync(Guid id, string key)

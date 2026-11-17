@@ -663,6 +663,7 @@ internal static class FoodOutput
         }
 
         WriteEarned(result.Earned);
+        RewardOutput.WritePending(result.FollowUpsPending);
     }
 
     /// <summary>
