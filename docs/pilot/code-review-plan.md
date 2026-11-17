@@ -653,4 +653,4 @@ built.
   fixed clock, and no spec that fixes one reads the real date); CR131 (the item detail's tabs say a
   failed read, R24 in part); CR132 (the `habits` tool's description names the states it answers);
   CR133 (the e2e specs are type-checked, R34); CR134 (a running fast reaches the kernel's clock,
-  R28 in part).
+  R28 in part); CR135 (`GET /api/habits/occurrences` refuses a day that doesn't parse, from P3).

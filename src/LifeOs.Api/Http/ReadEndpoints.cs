@@ -215,12 +215,19 @@ public static class ReadEndpoints
     /// <summary>
     /// Habit days: one habit's or every habit's, on one day (<paramref name="on"/>) or from
     /// <paramref name="from"/> to <paramref name="to"/> (each end optional; a review's days,
-    /// REVIEW-5). A day that doesn't parse is ignored.
+    /// REVIEW-5). A day is yyyy-MM-dd; one that doesn't parse is refused (code review CR135),
+    /// where it was once ignored, which read every habit day ever.
     /// </summary>
     private static async Task<IResult> GetOccurrences(
         SubjectReader reader, CancellationToken cancellationToken, Guid? habitId = null, string? on = null, string? from = null, string? to = null)
-        => Results.Ok((await reader.GetHabitOccurrencesAsync(habitId, Day(on), Day(from), Day(to), cancellationToken: cancellationToken)));
+        => Results.Ok((await reader.GetHabitOccurrencesAsync(
+            habitId, Occurrence(on, "on"), Occurrence(from, "from"), Occurrence(to, "to"), cancellationToken: cancellationToken)));
 
-    private static DateOnly? Day(string? text)
-        => !string.IsNullOrWhiteSpace(text) && DateOnly.TryParse(text, out var parsed) ? parsed : null;
+    /// <summary>A yyyy-MM-dd day, null when left out, or a refusal.</summary>
+    private static DateOnly? Occurrence(string? text, string name)
+        => string.IsNullOrWhiteSpace(text)
+            ? null
+            : DateOnly.TryParseExact(text, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var parsed)
+                ? parsed
+                : throw new ArgumentException($"{name} is a day, yyyy-MM-dd, not '{text}'.");
 }

@@ -197,5 +197,13 @@ public sealed class ReviewEndpointTests(PostgresFixture postgres)
         var days = await host.Client.GetFromJsonAsync<JsonElement>($"/api/habits/occurrences?from={yesterday}&to={iso}", Ct);
         var day = Assert.Single(days.EnumerateArray());
         Assert.Equal(("Stretch", "followed"), (S(day, "habitName"), S(day, "state")));
+
+        // A day that doesn't parse is refused, not read as no bound (code review CR135): a bad
+        // from= read every habit day ever.
+        foreach (var bad in new[] { "from=yesterday", $"from={yesterday}&to=31/12/2026", "on=2026-13-01", "on=1%2F2%2F2026" })
+        {
+            var refused = await host.Client.GetAsync($"/api/habits/occurrences?{bad}", Ct);
+            Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        }
     }
 }
