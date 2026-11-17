@@ -31,7 +31,8 @@ public sealed class ChangeReader(NpgsqlDataSource dataSource)
     /// many earns and reversals, which would drown the rest; ask for <c>ledger</c> by name.</item>
     /// <item>Some records are kept as versions (<c>bsk.event_record</c>): Oura re-sends a day as
     /// it changes, and editing a meal, a fast, a space photo, a rating, a reading or a lab visit
-    /// writes it again under the same id. Only the newest version comes back, with how many there
+    /// writes it again under the same id, as marking a day again does an exception day and editing a
+    /// workout's note does the note. Only the newest version comes back, with how many there
     /// are in <see cref="ChangeRow.Versions"/>. An older version in the window whose newest one is
     /// outside it (a meal moved to another day) is left out too.</item>
     /// <item><paramref name="before"/> continues a cut answer: only events older than that one,
@@ -173,8 +174,8 @@ public sealed class ChangeRow
 
     /// <summary>
     /// How many versions of this record there are: above 1 for an Oura record Oura re-sent as it
-    /// changed, and a meal, fast, space photo, rating, reading or lab visit that was edited. This
-    /// row is the newest.
+    /// changed, and a meal, fast, space photo, rating, reading, lab visit, exception day or workout
+    /// note that was edited. This row is the newest.
     /// </summary>
     public long Versions { get; set; } = 1;
 }

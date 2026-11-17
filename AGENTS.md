@@ -200,7 +200,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   `src/LifeOs.Domain/Reviews.cs` hold that rule; `tests/rules/reviews.json` checks both.
 - Versioned entries (meals, fasts, room ratings, photos): the newest by `recorded_at` wins, never
   by `occurred_at`. A new kind of them also goes in `bsk.event_record`, which `recent_changes`
-  folds by, and a migration that replaces that function rebuilds `bsk.event_record_idx` (`REINDEX`).
+  folds by (`VersionedRecordTests` finds every newest-version view's payload key there), and a
+  migration that replaces that function rebuilds `bsk.event_record_idx` (`REINDEX`).
 - Rewards and XP progression is a pure fold over events and is never stored.
 - The web copies some kernel rules (activity XP, the diet score, Home Score parts, review periods,
   level curves, the status vocabulary, the currency list, the mock's measurement starter list, and

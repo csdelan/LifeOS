@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0072 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0073 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -1906,7 +1906,7 @@ BEGIN
 END;
 $function$;
 
--- The record an event is a version of (an Oura record, a meal, a fast, a space photo or rating, a metric reading, a lab visit), or null when it stands alone. Its newest version by recorded_at is the record.
+-- The record an event is a version of (an Oura record, a meal, a fast, a space photo or rating, a metric reading, a lab visit, an exception day, a workout's note), or null when it stands alone. Its newest version by recorded_at is the record.
 CREATE OR REPLACE FUNCTION bsk.event_record(source_id text, external_id text, payload jsonb)
  RETURNS text
  LANGUAGE sql
@@ -1921,6 +1921,8 @@ AS $function$
         WHEN payload->'space_rating'->>'id' IS NOT NULL THEN 'space_rating:' || (payload->'space_rating'->>'id')
         WHEN payload->'metric_reading'->>'id' IS NOT NULL THEN 'metric_reading:' || (payload->'metric_reading'->>'id')
         WHEN payload->'lab_visit'->>'id' IS NOT NULL THEN 'lab_visit:' || (payload->'lab_visit'->>'id')
+        WHEN payload->'exception_day'->>'day' IS NOT NULL THEN 'exception_day:' || (payload->'exception_day'->>'day')
+        WHEN payload->'workout_note'->>'workout' IS NOT NULL THEN 'workout_note:' || (payload->'workout_note'->>'workout')
     END;
 $function$;
 
