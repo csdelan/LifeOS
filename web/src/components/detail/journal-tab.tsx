@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { EmptyState } from "@/components/primitives/empty-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { JournalEditor } from "@/components/journal/journal-editor";
 import { looksLikeHtml, sanitizeJournalHtml } from "@/components/journal/journal-html";
@@ -14,14 +15,17 @@ export const JOURNAL_PAGE = 20;
 
 export function JournalTab({ subjectId }: { subjectId: string }) {
   const pages = useServerPages(subjectId, JOURNAL_PAGE);
-  const { data, isLoading } = useJournal(subjectId, pages.limit);
+  const journal = useJournal(subjectId, pages.limit);
+  const { data, isLoading } = journal;
   const writes = useWrites();
   const [composing, setComposing] = useState(false);
 
   return (
     <div className="space-y-4">
       {isLoading ? <ListSkeleton rows={3} /> : null}
-      {!isLoading && (data ?? []).length === 0 ? (
+      {!isLoading && journal.isError && !data?.length ? (
+        <ReadFailed read={journal} what="The journal" />
+      ) : !isLoading && (data ?? []).length === 0 ? (
         <EmptyState title="No journal yet" description="Entries are append-only. A correction is a new entry." />
       ) : !isLoading ? (
         <ol className="space-y-3">

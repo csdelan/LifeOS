@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ReadFailed } from "@/components/primitives/read-state";
 import { Tag } from "@/components/primitives/tag";
 import { TagInput } from "@/components/primitives/tag-input";
 import { useSubjectTags, useTagUniverse, useWrites } from "@/lib/queries";
@@ -7,7 +8,8 @@ import { splitTags } from "@/lib/tag-suggest";
 import { useWriteAction } from "@/lib/write-action";
 
 export function TagsTab({ subjectId }: { subjectId: string }) {
-  const { data: tags } = useSubjectTags(subjectId);
+  const tagsRead = useSubjectTags(subjectId);
+  const tags = tagsRead.data;
   const { data: universe } = useTagUniverse();
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
@@ -44,7 +46,9 @@ export function TagsTab({ subjectId }: { subjectId: string }) {
         </p>
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {(tags ?? []).length === 0 ? (
+        {tagsRead.isError && !tags?.length ? (
+          <ReadFailed read={tagsRead} what="The tags" />
+        ) : (tags ?? []).length === 0 ? (
           <p className="text-sm text-muted-foreground">No tags yet.</p>
         ) : (
           (tags ?? []).map((t) => (

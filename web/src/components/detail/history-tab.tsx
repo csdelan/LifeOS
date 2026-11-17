@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/primitives/empty-state";
+import { ReadFailed } from "@/components/primitives/read-state";
 import { StatusPill } from "@/components/primitives/status-pill";
 import { useServerPages } from "@/components/primitives/use-paged";
 import { useHistory } from "@/lib/queries";
@@ -10,7 +11,9 @@ export const HISTORY_PAGE = 50;
 
 export function HistoryTab({ subjectId }: { subjectId: string }) {
   const pages = useServerPages(subjectId, HISTORY_PAGE);
-  const { data } = useHistory(subjectId, pages.limit);
+  const history = useHistory(subjectId, pages.limit);
+  const { data } = history;
+  if (history.isError && !data?.length) return <ReadFailed read={history} what="The status history" />;
   if (!data?.length) {
     return (
       <EmptyState

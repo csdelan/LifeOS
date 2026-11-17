@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { SubjectSearchCombobox } from "@/components/subject-search-combobox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DetailSection } from "@/components/primitives/detail-section";
+import { ReadFailed } from "@/components/primitives/read-state";
 import { TypeBadge } from "@/components/primitives/type-badge";
 import { ListSkeleton } from "@/components/primitives/skeletons";
 import { DecisionRelationships } from "@/components/detail/decision-relationships";
@@ -23,7 +24,8 @@ export function RelationshipsTab({
   type: SubjectType;
   onOpenSubject?: (id: string) => void;
 }) {
-  const { data, isLoading } = useRelations(subjectId);
+  const relations = useRelations(subjectId);
+  const { data, isLoading } = relations;
   const [rel, setRel] = useState<Relation>("serves");
   // A Decision adds to its groups instead of naming a relation (GEN-13).
   const decision = type === "Decision";
@@ -67,6 +69,7 @@ export function RelationshipsTab({
 
   return (
     <div className="space-y-4">
+      <ReadFailed read={relations} what="The relationships" />
       {decision ? (
         <DecisionRelationships rels={data} onOpenSubject={onOpenSubject} />
       ) : (
@@ -83,7 +86,7 @@ export function RelationshipsTab({
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : relations.isError ? null : (
               <p className="text-sm text-muted-foreground">No parents — unaligned for now.</p>
             )}
           </DetailSection>
@@ -104,7 +107,7 @@ export function RelationshipsTab({
                   </div>
                 ))}
               </div>
-            ) : (
+            ) : relations.isError ? null : (
               <p className="text-sm text-muted-foreground">No children yet.</p>
             )}
           </DetailSection>

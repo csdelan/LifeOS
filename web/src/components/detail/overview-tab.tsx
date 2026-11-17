@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DetailSection, PropertyList } from "@/components/primitives/detail-section";
+import { ReadFailed } from "@/components/primitives/read-state";
 import type { Tone } from "@/lib/tones";
 import { FieldBlock } from "@/components/create/subject-type-fields";
 import { useFieldOptions, type FieldLayout } from "@/components/create/field-options";
@@ -70,7 +71,8 @@ export function OverviewTab({
 }) {
   const writes = useWrites();
   const reported = useWriteAction({ report: "toast" });
-  const { data: files } = useSubjectFiles(subject.id);
+  const filesRead = useSubjectFiles(subject.id);
+  const files = filesRead.data;
   const values = form.watch();
   const type = subject.type;
   const visible = visibleFields(type, values.mode, values);
@@ -171,6 +173,7 @@ export function OverviewTab({
           ) : null}
         </DetailSection>
       ) : null}
+      <ReadFailed read={filesRead} what="The files" />
       {(files ?? []).length > 0 ? (
         <DetailSection title="Files" tone="teal" icon={PaperclipIcon}>
           <p className="text-xs text-muted-foreground">Related documents and kept audio. Open plays the managed copy.</p>

@@ -25,6 +25,25 @@ const at = (i: number) => new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString();
 beforeEach(() => resetStore());
 afterEach(() => vi.restoreAllMocks());
 
+// A failed read said "No journal yet" or "No status history" (code review CR131).
+describe("an item's journal and status history when the read fails", () => {
+  it("says the journal failed to load, not that it's empty", async () => {
+    vi.spyOn(mockReads, "journal").mockRejectedValue(new Error("offline"));
+    renderWith(<JournalTab subjectId="goal-lifeos" />);
+
+    expect(await screen.findByText("The journal failed to load.")).toBeInTheDocument();
+    expect(screen.queryByText("No journal yet")).not.toBeInTheDocument();
+  });
+
+  it("says the status history failed to load, not that there is none", async () => {
+    vi.spyOn(mockReads, "history").mockRejectedValue(new Error("offline"));
+    renderWith(<HistoryTab subjectId="goal-lifeos" />);
+
+    expect(await screen.findByText("The status history failed to load.")).toBeInTheDocument();
+    expect(screen.queryByText("No status history")).not.toBeInTheDocument();
+  });
+});
+
 // The detail read every journal entry and status change, and a series' every repetition, to show
 // the newest few (code review CR121): each now reads a page, and Show older or Show more the next.
 describe("an item's journal and status history, a page at a time", () => {
