@@ -9,7 +9,8 @@ to CR107 are built from it ([Fourth review](#fourth-review-2026-11-13)). The fif
 carries every proposal the fourth left open. R1 to R11 and R14 to R18 are built as CR108 to CR123
 (2026-11-14 and 2026-11-15), its choice D as CR125 (2026-11-15), R13 and R18's query budget as
 CR127 and R12 as CR128 (2026-11-15), and R19 to R35 are still proposed
-([Fifth review](#fifth-review-2026-11-14)).
+([Fifth review](#fifth-review-2026-11-14)). From 2026-11-17 a review runs every night and builds
+up to ten of its own fixes as CRs ([Nightly reviews](#nightly-reviews)).
 Each CR is one commit whose message names it (`code review CR<n>`), so
 `git log --grep "code review CR"` shows them. They reach staging at the next push.
 
@@ -631,3 +632,17 @@ handles; the list-plus-detail wiring five times, where Habits and Rewards don't 
   Either move them into Application, refused at every door, or record that they stay in the screens
   and delete the web's copy that can't run. *Chosen 2026-11-15: into Application, refused at every
   door (CR125).*
+
+## Nightly reviews
+
+From 2026-11-17 a scheduled task in Chris's Claude app (`lifeos-nightly-quality`, 2 AM) reviews the
+repo the way the full reviews did: six Opus 5.5 reviewers, one per area, findings first and scores
+second, except that none is shown an earlier score. It writes the review to
+`docs/agents/quality-reviews/<date>.md`, adds its scores to `docs/agents/quality-scorecard.md`, and
+builds up to ten of its checked findings that are small enough to finish that night with a test,
+each as a CR of its own, on `main` and not pushed; then it emails Chris a summary. It leaves alone
+what a plan records as his choice or as waiting on him, what needs a live system to make or check,
+migrations that move data, changes to the event log's payloads or the reward economy, and anything
+outside programs read that it would remove or rename. A proposal above that it builds starts "Built
+as CR<n> (nightly <date>)". Each night adds a bullet here with its score, its review and the CRs it
+built.

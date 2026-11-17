@@ -69,6 +69,12 @@ The same six areas every time, so each can be compared with its own past:
    a different model is a different ruler.
 3. Add the scores below, and the review's findings to `docs/pilot/code-review-plan.md` as before.
 
+From 2026-11-17 a scheduled task in Chris's Claude app (`lifeos-nightly-quality`, 2 AM) does this
+every night, with reviewers who aren't shown any earlier score. Each night's review, with each
+area's six scores and the night's notes, goes in `docs/agents/quality-reviews/<date>.md`; the
+night adds one row to each table below, and up to ten of its fixes are built as CRs
+(`docs/pilot/code-review-plan.md`, Nightly reviews).
+
 ## History
 
 ### Rubric scores
