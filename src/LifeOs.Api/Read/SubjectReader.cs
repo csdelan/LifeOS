@@ -1064,6 +1064,14 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     }
 
     /// <summary>
+    /// The states a habit's scheduled day is answered with: each adherence result as the JSON edge
+    /// spells it, and <c>unrecorded</c> for a day nothing was logged on. A day the habit isn't
+    /// scheduled has no row. The <c>habits</c> tool's description names each (code review CR132).
+    /// </summary>
+    public static IReadOnlyList<string> HabitDayStates { get; } =
+        [.. AdherenceResults.All.Select(s => MapAdherenceState(s)!), "unrecorded"];
+
+    /// <summary>
     /// The UI's <c>AdherenceState</c> uses <c>not_followed</c> where the kernel
     /// stores <c>missed</c>. Map at the JSON edge so the contract matches
     /// <c>production-ui-types.ts</c>.

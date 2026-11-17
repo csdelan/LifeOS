@@ -27,8 +27,9 @@ public sealed class PlanTools(SubjectReader subjects, McpReads reads, McpOptions
     [Description("""
         Chris's habits with each one's state on a day and the 6 days before it, its streak, and,
         while it's Building, its progress toward Established. A Planned habit isn't tracked yet, so
-        it has no scheduled days. A day's state is followed, partial, missed, unrecorded
-        (scheduled, nothing logged yet) or absent (not scheduled that day).
+        it has no scheduled days. A scheduled day's state is followed, partial, not_followed (a
+        missed day) or unrecorded (nothing logged yet). On a day the habit isn't scheduled, on is
+        null and week leaves the day out.
         """)]
     public async Task<CallToolResult> Habits(
         [Description("The day (yyyy-MM-dd). Default today.")] string? on = null,

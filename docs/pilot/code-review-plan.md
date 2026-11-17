@@ -651,4 +651,4 @@ built.
   Built: CR129 (a food, room-rating, exception-day or Oura-sync write answers pending when its
   settle or rank-up fails after the commit); CR130 (the Food Log golden spec counts its days from its
   fixed clock, and no spec that fixes one reads the real date); CR131 (the item detail's tabs say a
-  failed read, R24 in part).
+  failed read, R24 in part); CR132 (the `habits` tool's description names the states it answers).
