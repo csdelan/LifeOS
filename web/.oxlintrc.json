@@ -28,7 +28,7 @@
       "rules": { "no-restricted-imports": "off" }
     },
     {
-      "files": ["src/lib/live/write-client.ts"],
+      "files": ["src/lib/live/write-client.ts", "src/lib/features/*/writes.ts"],
       "rules": {
         "no-restricted-imports": [
           "error",

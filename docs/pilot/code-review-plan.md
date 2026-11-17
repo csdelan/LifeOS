@@ -654,4 +654,5 @@ built.
   failed read, R24 in part); CR132 (the `habits` tool's description names the states it answers);
   CR133 (the e2e specs are type-checked, R34); CR134 (a running fast reaches the kernel's clock,
   R28 in part); CR135 (`GET /api/habits/occurrences` refuses a day that doesn't parse, from P3);
-  CR136 (migration 0073: exception days and workout notes are records to `bsk.event_record`).
+  CR136 (migration 0073: exception days and workout notes are records to `bsk.event_record`);
+  CR137 (CR55's lint rule covers every feature's `writes.ts`, from P3).
