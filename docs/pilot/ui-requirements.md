@@ -360,6 +360,13 @@ Build:      needs-kernel
   free-text / set-on-the-Today-screen bullets** with the resolved "Goal-linked, review-set"
   model.
 
+**Update (2026-11-17 — planned, [focus plan](focus-plan.md)):** until now Focus picked the
+Active Goal with the nearest target date, and the review's *Keep focus* switch saved a flag
+nothing read. G1 makes the Primary focus a Goal you choose in the daily or weekly review, kept as
+events until you change it, with the date rule as a labelled suggestion when none is chosen. The
+open decisions above are settled there: events, not a Season or a setting, and Goal-linked, not
+free text. Daily objectives stay later.
+
 
 ### TODAY-2 — Today's priorities combine manual planning with explainable suggestions
 Horizon:    Pilot
@@ -934,6 +941,11 @@ Build:      built
   abandonment notes ride the `state_change` event.
 - Decided (2026-11-15, fifth code review's choice D, CR125): the activation gate is
   kernel-enforced, not app-side. The Pilot is frozen and keeps its own copy.
+
+**Update (2026-11-17 — sub-goals, planned in the [focus plan](focus-plan.md) G2):** Chris:
+"I can't create subgoals from those (short term goals as milestones of long term goals)." A
+Goal will take sub-goals: Goals that `serves` it, made from its page like a Project. A
+sub-goal satisfies the Identity Statement rule through its parent, and no link may close a loop.
 
 
 ### GEN-9 — Projects use a type-specific form and may stand alone
@@ -4744,6 +4756,10 @@ not a Commitment base type.)*
   alignment described above. D6 is fully settled.
 - **Reconcile:** TODAY-1 still allows Primary focus as free text / set on the Today screen —
   Chris to align those bullets with "Goal-linked, review-set" when convenient.
+- **Update (2026-11-17, [focus plan](focus-plan.md)):** the weekly focus is built first (G1),
+  set in the daily or weekly review; the monthly one waits for monthly reviews. Chris chose
+  sub-goals (a Goal that `serves` a Goal) for a long-term Goal's milestones (G2), which is also
+  the Goal-to-Goal link the soft alignment above reads.
 
 With this resolved, DASHBOARD-1 / TODAY-1 / TODAY-2 / REVIEW-* can now be mapped.
 
@@ -5122,7 +5138,7 @@ gathered at the end.
   `POST /api/tasks/settle`. — **Shipped** (RT1–RT5 in
   [recurring-tasks-plan.md](recurring-tasks-plan.md), 2026-10-24).
 
-**Still open:** **D6 focus storage** (TODAY-1), and Measurements' **M5** (Compare,
+**Still open:** **D6 focus storage** (TODAY-1, planned in [focus-plan.md](focus-plan.md)), and Measurements' **M5** (Compare,
 MEASURE-5) and **M6** (the `health` tool, MEASURE-6). The Review type, scheduling and missed
 shipped in migration 0052 (REVIEW-0 / D8), and a review's answers are the vault reflection it
 links to (reviews plan §4.1, R5, migration 0054). Everything else above has shipped. The

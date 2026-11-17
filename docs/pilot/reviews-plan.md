@@ -49,7 +49,7 @@ recap and the check-offs stay in LifeOS. §4 has the details.
 | Missed | **An Open review whose day is over reads as Missed.** Nothing writes that on a schedule: it's worked out on every read from the day and when the review was first completed. Missed can also be set by hand ("not doing this one"), which is also what Drop sets. |
 | Late | **A past review can be opened and completed late** (a backfill). It reads "Completed late" and stays missed: completing it doesn't erase the miss (REVIEW-2). |
 | Completing | A **status change to Completed**, as `bsk status` writes it, so it's in the review's history. Completing a completed review writes nothing. A completed review stays editable. |
-| Keep focus | A **"keep my Primary focus" switch** on each review, on unless turned off. |
+| Keep focus | A **"keep my Primary focus" switch** on each review, on unless turned off. Nothing reads it yet: Focus picks the Goal by its date until the [focus plan](focus-plan.md)'s G1 lets the review choose it. |
 | The recap | **A read over `bsk`**: status changes, completed and overdue Tasks, repeating Tasks, habits, appointments and the Inbox for the days it looks back on. |
 | Habit check-offs | **The same buttons as Focus** (followed, partial, not followed) for each habit day the review looks back on, writing the same adherence events (REVIEW-5). |
 | Answers | **In the notes vault, as a dictated reflection an agent formats; the review links to the note** (Chris, 2026-11-12, §4). R5 built the link (§4.1): LifeOS holds the note's path and summary, never its text. |
