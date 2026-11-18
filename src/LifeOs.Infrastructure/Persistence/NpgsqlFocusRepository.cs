@@ -12,7 +12,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlFocusRepository(NpgsqlDataSource dataSource) : IFocusRepository
 {
-    // Aliased to the row's property names (the CLI host doesn't turn on underscore matching).
+    // Aliased to the row's property names.
     // v_focus filters on level, its partition key, so the lookup goes below its window.
     private const string FocusSql = """
         SELECT f.level, f.goal_id AS goalid, g.urn AS goalurn, g.title AS goaltitle,

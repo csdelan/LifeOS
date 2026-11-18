@@ -138,7 +138,7 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         """;
 
     // Each of the `keyed` events' keys, after its net: its latest earn as bsk.v_award_credit picks
-    // it, and its newest entry. Aliased to KeyedRow's names (no underscore matching in the CLI host).
+    // it, and its newest entry. Aliased to KeyedRow's names.
     private const string KeyedFoldSql = """
 
         latest_earn AS (
@@ -188,8 +188,7 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
         await connection.OpenAsync(cancellationToken);
 
         // Page by entry, not by row: the newest `limit` events, then every currency row
-        // they carry. Aliased to the row's property names (no underscore matching in the
-        // CLI host).
+        // they carry, aliased to the row's property names.
         var rows = await connection.QueryAsync<LedgerRow>(new CommandDefinition(
             """
             WITH picked AS (
@@ -227,8 +226,7 @@ public sealed class NpgsqlLedgerRepository(NpgsqlDataSource dataSource, string h
 
         // The range ends are local midnights in the zone (`timestamp AT TIME ZONE` gives the
         // instant, across DST changes), so the occurred_at index still serves the scan; each
-        // row is filed on the date its instant reads in the zone. Aliased to DayRow's names
-        // (no underscore matching in the CLI host).
+        // row is filed on the date its instant reads in the zone. Aliased to DayRow's names.
         const string sql = """
             SELECT to_char((l.occurred_at AT TIME ZONE @tz)::date, 'YYYY-MM-DD') AS day,
                    l.currency,

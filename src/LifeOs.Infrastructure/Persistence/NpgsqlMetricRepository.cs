@@ -16,7 +16,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlMetricRepository(NpgsqlDataSource dataSource) : IMetricRepository
 {
-    // Aliased to the rows' property names (the CLI host doesn't turn on underscore matching);
+    // Aliased to the rows' property names;
     // dates and local times as text, since Dapper has no DateOnly mapping in every host.
     private const string MetricSql = """
         SELECT id, urn, name, unit, decimals, target, better, catalog, archived_at AS archivedat,

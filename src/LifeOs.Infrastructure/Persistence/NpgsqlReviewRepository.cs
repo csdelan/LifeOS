@@ -13,7 +13,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlReviewRepository(NpgsqlDataSource dataSource) : IReviewRepository
 {
-    // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
+    // Aliased to the row's property names;
     // days as text, since Dapper has no DateOnly mapping in every host.
     private const string ReviewSql = """
         SELECT id, urn, title, kind, to_char(period, 'YYYY-MM-DD') AS period, status,

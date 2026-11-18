@@ -18,7 +18,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlSpaceRepository(NpgsqlDataSource dataSource) : ISpaceRepository
 {
-    // Aliased to the rows' property names (the CLI host doesn't turn on underscore matching);
+    // Aliased to the rows' property names;
     // dates as text, since Dapper has no DateOnly mapping in every host. The fold's read
     // (HomeSql) leaves out the shots, so it never needs a database past 0044.
     private const string HomeSql = """

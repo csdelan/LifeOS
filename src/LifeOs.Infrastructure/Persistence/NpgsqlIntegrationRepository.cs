@@ -16,8 +16,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlIntegrationRepository(NpgsqlDataSource dataSource, TokenCipher? cipher) : IIntegrationRepository
 {
-    // Aliased to the row's property names: the CLI host doesn't turn on Dapper's underscore
-    // matching. Dates as text, since Dapper has no DateOnly mapping in every host.
+    // Aliased to the row's property names. Dates as text, since Dapper has no DateOnly mapping in every host.
     private const string StateColumns = """
         service, access_token_enc IS NOT NULL AS connected, connected_at AS connectedat,
         expires_at AS expiresat, scopes, needs_reconnect AS needsreconnect,

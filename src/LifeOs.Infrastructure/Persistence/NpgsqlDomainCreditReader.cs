@@ -28,7 +28,7 @@ namespace LifeOs.Infrastructure.Persistence;
 public sealed class NpgsqlDomainCreditReader(NpgsqlDataSource dataSource, IClock clock, string homeTimeZone = HomeZone.Default)
     : IDomainCreditReader
 {
-    // Aliased to CreditRow's names (no underscore matching in the CLI host). A passive award's key
+    // Aliased to CreditRow's names. A passive award's key
     // starts with its trigger (sleep:2026-10-24, §7.4.2), and no item trigger shares a passive
     // trigger's name, so the key's first part says which base is passive.
     private const string CreditColumns = """

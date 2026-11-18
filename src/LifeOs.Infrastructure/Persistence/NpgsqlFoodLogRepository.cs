@@ -16,7 +16,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlFoodLogRepository(NpgsqlDataSource dataSource, IClock clock) : IFoodLogRepository
 {
-    // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
+    // Aliased to the row's property names;
     // dates as text, since Dapper has no DateOnly mapping in every host.
     private const string MealSql = """
         SELECT meal_id AS id, eaten_at AS eatenat, to_char(eaten_on, 'YYYY-MM-DD') AS eatenon,

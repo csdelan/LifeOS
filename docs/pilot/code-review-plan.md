@@ -671,4 +671,6 @@ built.
   changes it; from P3); CR144 (a workout note whose save on closing fails says so in a toast, R24's
   workout note); CR145 (the repeat panel's Mark missed, Stop repeating and Repeat again say one
   success, the status change's own); CR146 (migration 0075: `bsk.recurrence_occurrences` reads a
-  repeat number or weekday list it can't use as no dates, and `CastGuardTests` scans functions).
+  repeat number or weekday list it can't use as no dates, and `CastGuardTests` scans functions);
+  CR147 (fourteen repository comments no longer say `bsk` lacks Dapper's underscore matching, from
+  P3).

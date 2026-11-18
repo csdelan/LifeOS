@@ -13,8 +13,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlRewardCatalogReader(NpgsqlDataSource dataSource) : IRewardCatalogReader
 {
-    // The catalog columns, aliased to CatalogRow's property names (no underscore
-    // matching in the CLI host). price is read as text and parsed leniently in C#.
+    // The catalog columns, aliased to CatalogRow's property names. price is read as text and parsed leniently in C#.
     private const string CatalogSql = """
         SELECT id, urn, name, kind, price::text AS pricejson, target_usd AS targetusd,
                redemptions, coins_redeemed AS coinsredeemed, dollars_redeemed AS dollarsredeemed,

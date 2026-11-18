@@ -13,8 +13,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlTimerRepository(NpgsqlDataSource dataSource) : ITimerRepository
 {
-    // Aliased to the row's property names: the CLI host does not turn on Dapper's
-    // underscore matching, and Dapper matches the rest case-insensitively.
+    // Aliased to the row's property names; Dapper matches the rest case-insensitively.
     private const string SelectSql = """
         SELECT subject_id AS subjectid, subject_urn AS subjecturn, subject_type AS subjecttype,
                subject_title AS subjecttitle, state, running_since AS runningsince,

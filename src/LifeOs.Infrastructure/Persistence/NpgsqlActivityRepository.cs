@@ -17,7 +17,7 @@ namespace LifeOs.Infrastructure.Persistence;
 /// </summary>
 public sealed class NpgsqlActivityRepository(NpgsqlDataSource dataSource) : IActivityRepository
 {
-    // Aliased to the row's property names (the CLI host doesn't turn on underscore matching);
+    // Aliased to the row's property names;
     // dates as text, since Dapper has no DateOnly mapping in every host.
     private const string ActivityDaySql = """
         SELECT to_char(day, 'YYYY-MM-DD') AS day, steps, active_calories AS activecalories,
