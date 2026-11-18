@@ -663,4 +663,6 @@ built.
   repeating Task's follow-up fails after the commit, and every series follow-up in Application
   runs through `AfterCommit`); CR140 (`/api/adhere`, `/api/recur`, `bsk adhere --on` and
   `bsk materialize --through` read a day as `yyyy-MM-dd` only, and no code reads a `DateOnly`
-  leniently but the Pilot's own text boxes; from P3's day parsers, in part).
+  leniently but the Pilot's own text boxes; from P3's day parsers, in part); CR141 (the Pilot
+  offers a Goal under a Goal, and its parent map, Drop statuses and terminal words are compared
+  with the kernel's; R30's vocabulary part).

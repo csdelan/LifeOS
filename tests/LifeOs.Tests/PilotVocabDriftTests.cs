@@ -42,6 +42,43 @@ public sealed class PilotVocabDriftTests
         }
     }
 
+    /// <summary>
+    /// The rest of the Pilot's copies (code review CR141). The kernel learned a Goal under a Goal
+    /// (focus plan G2) and the Pilot's parent map didn't, so its New dialog never offered a
+    /// sub-goal; nothing compared the map, the terminal words or Drop's statuses. <c>PilotVocab.cs</c>
+    /// is compiled into this assembly, so these compare its answers with the kernel's directly.
+    /// </summary>
+    [Fact]
+    public void Pilot_parent_map_matches_the_kernel_for_every_pair_of_types()
+    {
+        var pairs = SubjectTypes.All.SelectMany(child => SubjectTypes.All.Select(parent => (child, parent)));
+
+        Assert.Empty(pairs
+            .Where(p => LifeOs.Pilot.Shell.PilotVocab.InferChildRelation(p.child, p.parent) != ParentChildRelations.Infer(p.child, p.parent))
+            .Select(p => $"{p.child} under {p.parent}: Pilot {LifeOs.Pilot.Shell.PilotVocab.InferChildRelation(p.child, p.parent) ?? "none"}, kernel {ParentChildRelations.Infer(p.child, p.parent) ?? "none"}"));
+    }
+
+    [Fact]
+    public void Pilot_drop_status_matches_the_kernel_for_every_type()
+    {
+        Assert.Empty(SubjectTypes.All
+            .Where(t => LifeOs.Pilot.Shell.PilotVocab.DismissStatusFor(t) != StatusVocabulary.DismissStatusFor(t))
+            .Select(t => $"{t}: Pilot '{LifeOs.Pilot.Shell.PilotVocab.DismissStatusFor(t)}', kernel '{StatusVocabulary.DismissStatusFor(t)}'"));
+    }
+
+    [Fact]
+    public void Pilot_terminal_words_match_the_kernel()
+    {
+        // Every status any type has, and the legacy words the kernel's set also carries.
+        var words = SubjectTypes.All.SelectMany(StatusVocabulary.For)
+            .Concat(["done", "dropped", "archived", "superseded", "active", "open", "", "  "])
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Empty(words
+            .Where(w => LifeOs.Pilot.Shell.PilotVocab.IsTerminal(w) != StatusVocabulary.IsTerminal(w))
+            .Select(w => $"'{w}': Pilot {LifeOs.Pilot.Shell.PilotVocab.IsTerminal(w)}, kernel {StatusVocabulary.IsTerminal(w)}"));
+    }
+
     private static Dictionary<string, string[]> ParsePilotStatusByType()
     {
         var source = File.ReadAllText(PilotVocabPath());

@@ -4,7 +4,8 @@ namespace LifeOs.Pilot.Shell;
 /// Pilot-local mirrors of the kernel vocabularies. The Pilot must not reference
 /// the kernel assemblies (invariant 9 / "no ProjectReference"), so these strings
 /// are duplicated here and kept in lockstep with <c>StatusVocabulary</c> /
-/// <c>ParentChildRelations</c> by convention.
+/// <c>ParentChildRelations</c>. <c>PilotVocabDriftTests</c> compares every table with the kernel's
+/// (code review CR141).
 /// </summary>
 internal static class PilotVocab
 {
@@ -94,13 +95,15 @@ internal static class PilotVocab
     public static string DismissStatusFor(string type)
         => DismissStatusByType.TryGetValue(type, out var status) ? status : "";
 
-    // (childType, parentType) → relation. Dominant hierarchy Value→Goal→Project→Task, plus Task under Goal.
+    // (childType, parentType) → relation. Dominant hierarchy Value→Goal→Project→Task, plus Task under
+    // Goal and a Goal under a Goal, its milestone (focus plan G2).
     private static readonly Dictionary<(string Child, string Parent), string> ParentMap = new()
     {
         [(Goal, Value)] = Serves,
         [(Project, Goal)] = ResultsIn,
         [(Task, Project)] = Serves,
         [(Task, Goal)] = Serves,
+        [(Goal, Goal)] = Serves,
     };
 
     public static IReadOnlyList<string> StatusesFor(string type)
