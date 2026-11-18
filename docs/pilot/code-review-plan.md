@@ -669,4 +669,5 @@ built.
   from C# are compared with it, R27 in part); CR143 (a review's recap refreshes after a subject
   write or a check-off, and every cached read is refreshed by some write or listed with why none
   changes it; from P3); CR144 (a workout note whose save on closing fails says so in a toast, R24's
-  workout note).
+  workout note); CR145 (the repeat panel's Mark missed, Stop repeating and Repeat again say one
+  success, the status change's own).

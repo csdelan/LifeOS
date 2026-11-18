@@ -68,7 +68,9 @@ test.describe("golden paths: repeating tasks and timers", () => {
     await expect(detail.getByRole("region", { name: "Timer" })).toBeVisible();
     await expect(repeats.getByRole("listitem").filter({ hasText: "This one" })).toContainText("due Oct 14");
     await repeats.getByRole("button", { name: "Mark missed" }).click();
-    await expect(page.getByText("Marked missed")).toBeVisible();
+    // One success message, the status change's own (code review CR145).
+    await expect(page.getByText("Status → Missed")).toHaveCount(1);
+    await expect(page.getByText("Marked missed")).toHaveCount(0);
     await expect(group(/^Overdue/).getByRole("button", { name: /Water plants/ })).toHaveCount(0);
 
     // The Repeating view lists the task itself, with how it's gone.

@@ -1,5 +1,4 @@
 import { useState, type ReactNode } from "react";
-import { toast } from "sonner";
 import { RepeatIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DetailSection, PropertyList, PropertyRow } from "@/components/primitives/detail-section";
@@ -54,8 +53,10 @@ export function RepeatPanel({
   const count = history?.repetitionCount ?? rows.length;
   const label = repeatLabel(repeating.recurrence) ?? "Repeats";
 
-  async function move(id: string, status: string, done: string) {
-    await changing.run(() => writes.setStatus(id, status), () => toast.success(done));
+  // The status change says its own success ("Status → Missed"), so the panel adds none: two
+  // toasts for one move (code review CR145).
+  async function move(id: string, status: string) {
+    await changing.run(() => writes.setStatus(id, status));
   }
 
   const action = editing ? null : repeating.isSeries ? (
@@ -64,7 +65,7 @@ export function RepeatPanel({
         variant="outline"
         size="xs"
         disabled={busy}
-        onClick={() => void move(repeating.seriesId, "Not started", "Repeating again, from today")}
+        onClick={() => void move(repeating.seriesId, "Not started")}
       >
         Repeat again
       </Button>
@@ -73,13 +74,13 @@ export function RepeatPanel({
         variant="outline"
         size="xs"
         disabled={busy}
-        onClick={() => void move(repeating.seriesId, "Cancelled", "Stopped repeating")}
+        onClick={() => void move(repeating.seriesId, "Cancelled")}
       >
         Stop repeating
       </Button>
     )
   ) : own && !isTerminal(own.status) && !own.archived ? (
-    <Button variant="outline" size="xs" disabled={busy} onClick={() => void move(subjectId, "Missed", "Marked missed")}>
+    <Button variant="outline" size="xs" disabled={busy} onClick={() => void move(subjectId, "Missed")}>
       Mark missed
     </Button>
   ) : null;
