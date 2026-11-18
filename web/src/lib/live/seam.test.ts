@@ -86,4 +86,18 @@ describe("the live seam (code review CR82)", () => {
     ]);
     expect(byHand).toEqual([]);
   });
+
+  it("has no TODO(api) note for an endpoint the live seam already calls (CR148)", () => {
+    const called = new Set(
+      Object.values(sources).flatMap((text) =>
+        [...text.matchAll(/\bapi\(\)\.(?:GET|POST|PUT|PATCH|DELETE)\(\s*"([^"]+)"/g)].map((m) => m[1]),
+      ),
+    );
+    const stale = offenders((_path, text) =>
+      [...text.matchAll(/TODO\(api\)[^\n]*/g)]
+        .filter((m) => [...m[0].matchAll(/\/api\/[\w{}/-]+/g)].some((p) => called.has(p[0])))
+        .map((m) => m.index),
+    );
+    expect(stale).toEqual([]);
+  });
 });

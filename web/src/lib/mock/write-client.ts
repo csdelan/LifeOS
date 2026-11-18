@@ -544,7 +544,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async captureDocument(req) {
       await wait();
-      // TODO(api): multipart upload to the kernel's attach write path (`bsk attach`).
       const sha256 = (await sha256Hex(req.file)) ?? null;
       const result = captureDocument({ ...req, sha256 });
       bump();
@@ -553,7 +552,6 @@ export function createMockWriteClient(onChange?: () => void): LifeOsWriteClient 
 
     async captureVoice(req) {
       await wait();
-      // TODO(api): multipart upload to the kernel's voice write path (`bsk voice`).
       const keep = req.keepAudio || !req.transcript.trim();
       const sha256 = keep && req.audioBlob ? (await sha256Hex(req.audioBlob)) ?? null : null;
       const ext = extensionForMime(req.audioBlob?.type || "audio/webm");

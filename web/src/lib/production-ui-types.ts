@@ -2073,13 +2073,13 @@ export interface LifeOsWriteClient extends MeasurementWrites, PeopleWrites, Focu
   /**
    * Document / attachment capture (CAP-4). Note → `note` event + binary artifact;
    * Idea / Problem → durable subject (D4) with the file related onto it.
-   * // TODO(api): multipart POST to the kernel attach write path.
+   * Live: a multipart POST to /api/capture/document.
    */
   captureDocument(req: CaptureDocumentRequest): Promise<BinaryCaptureResult>;
   /**
    * Voice capture (CAP-2). Note → `voice` event + transcript (+ audio if kept);
    * Idea / Problem → durable subject (D4). Empty transcript forces audio retention.
-   * // TODO(api): multipart POST to the kernel voice write path.
+   * Live: a multipart POST to /api/capture/voice.
    */
   captureVoice(req: CaptureVoiceRequest): Promise<BinaryCaptureResult>;
   /**

@@ -673,4 +673,5 @@ built.
   success, the status change's own); CR146 (migration 0075: `bsk.recurrence_occurrences` reads a
   repeat number or weekday list it can't use as no dates, and `CastGuardTests` scans functions);
   CR147 (fourteen repository comments no longer say `bsk` lacks Dapper's underscore matching, from
-  P3).
+  P3); CR148 (seven stale `TODO(api)` notes go, and a seam test finds a note for an endpoint the
+  live seam already calls; from P3).

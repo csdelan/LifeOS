@@ -126,18 +126,17 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
   /** The newest `limit` (50 when left out) items to leave the Inbox, most recently resolved first (Back to Inbox). */
   inboxResolved(limit?: number): Promise<ResolvedInboxItem[]>;
   /**
-   * Artifact metadata (no payload).
-   * // TODO(api): GET /api/artifacts/{id} from `bsk.v_artifact`.
+   * Artifact metadata (no payload). Live: GET /api/artifacts/{id}.
    */
   artifact(id: string): Promise<ArtifactRecord | null>;
   /**
    * URL that streams the managed bytes.
-   * Mock: the retained object URL. // TODO(api): kernel bytes-fetch / `bsk artifact get`.
+   * Mock: the retained object URL. Live: the bytes from GET /api/artifacts/{id}/content.
    */
   artifactBytesUrl(id: string): Promise<string | null>;
   /**
    * Binary artifacts related onto a subject (the Files section).
-   * // TODO(api): GET /api/subjects/{id}/files
+   * Live: GET /api/subjects/{id}/files.
    */
   subjectFiles(subjectId: string): Promise<ArtifactRecord[]>;
   areas(): Promise<AreaRow[]>;
