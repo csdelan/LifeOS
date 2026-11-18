@@ -50,6 +50,38 @@ public sealed partial class SchemaSnapshotTests(PostgresFixture postgres)
         Assert.Equal(Constants(typeof(Provenances)), await AllowedAsync(connection, "bsk.event", "provenance"));
     }
 
+    /// <summary>
+    /// The lists a view copies from C# (code review CR142): a view that keeps an attribute only when
+    /// it's one of a list (<c>attributes ->> 'panel' = ANY (ARRAY[...])</c>) reads a value the
+    /// kernel added later as null, and nothing failed. Each copy here is compared with its C# list.
+    /// </summary>
+    [Theory]
+    [InlineData("bsk.v_metric", "better", nameof(MetricBetter))]
+    [InlineData("bsk.v_metric", "panel", nameof(LabPanels))]
+    [InlineData("bsk.v_review", "kind", nameof(ReviewKinds))]
+    public async Task A_list_a_view_copies_from_the_kernel_matches_it(string view, string key, string list)
+    {
+        await using var connection = new NpgsqlConnection(postgres.ConnectionString);
+        await connection.OpenAsync(Ct);
+        var definition = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+            "SELECT pg_get_viewdef(@view::regclass, true);", new { view }, cancellationToken: Ct));
+
+        var copy = System.Text.RegularExpressions.Regex.Match(
+            definition!, $@"->> '{key}'::text\) = ANY \(ARRAY\[(?<values>[^\]]*)\]\)");
+        Assert.True(copy.Success, $"{view} no longer copies a list for '{key}'; take its case out.");
+        var values = System.Text.RegularExpressions.Regex.Matches(copy.Groups["values"].Value, @"'([^']*)'::text")
+            .Select(m => m.Groups[1].Value);
+
+        IReadOnlyList<string> kernel = list switch
+        {
+            nameof(MetricBetter) => MetricBetter.All,
+            nameof(LabPanels) => LabPanels.All,
+            nameof(ReviewKinds) => ReviewKinds.All,
+            _ => throw new ArgumentOutOfRangeException(nameof(list)),
+        };
+        Assert.Equal(kernel.Order(StringComparer.Ordinal), values.Order(StringComparer.Ordinal));
+    }
+
     // The lists the doors read hold every constant once, so a new type or kind reaches them all
     // (code review CR41).
     [Fact]
