@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0074 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0075 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -2169,7 +2169,8 @@ BEGIN
                        WHEN 'sun' THEN 0 WHEN 'mon' THEN 1 WHEN 'tue' THEN 2
                        WHEN 'wed' THEN 3 WHEN 'thu' THEN 4 WHEN 'fri' THEN 5
                        WHEN 'sat' THEN 6 END
-            FROM jsonb_array_elements_text(recur->'on') x
+            FROM jsonb_array_elements_text(
+                     CASE WHEN jsonb_typeof(recur->'on') = 'array' THEN recur->'on' ELSE '[]'::jsonb END) x
         );
 
     ELSIF freq = 'interval' THEN
@@ -2177,7 +2178,8 @@ BEGIN
         IF recur->>'from' = 'completion' THEN
             RETURN;
         END IF;
-        every := (recur->>'every')::int;
+        -- A whole number only: one bad value would otherwise make every read through this throw.
+        every := CASE WHEN recur->>'every' ~ '^\s*-?[0-9]{1,9}\s*$' THEN (recur->>'every')::int END;
         IF every IS NULL OR every < 1 THEN
             RETURN;
         END IF;
@@ -2219,7 +2221,7 @@ BEGIN
             WHERE last_day BETWEEN win_start AND win_end
               AND last_day >= anchor;
         ELSE
-            day_n := (recur->>'day')::int;
+            day_n := CASE WHEN recur->>'day' ~ '^\s*-?[0-9]{1,9}\s*$' THEN (recur->>'day')::int END;
             IF day_n IS NULL OR day_n < 1 OR day_n > 31 THEN
                 RETURN;
             END IF;

@@ -147,7 +147,7 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   fails it until you add its read, and it lists every view over `bsk.event` with its reads by key,
   or why it's read whole. A cast of a JSON value needs a test sound for its type in its own
   CASE or the view's WHERE (`is_uuid_text`, `jsonb_typeof`, ...), or a CHECK, and a time goes through
-  `bsk.try_to_timestamptz`: `CastGuardTests` scans every view and the C# SQL.
+  `bsk.try_to_timestamptz`: `CastGuardTests` scans every view, every function and the C# SQL.
 - `bsk migrate` takes a lock, and refuses a pending migration numbered below the highest one already
   applied (`--allow-out-of-order` overrides); `--pending` lists what it would apply.
   `scripts/migrate-staging.ps1`, `restore.ps1` and the backup run the bsk `Get-MainBsk`

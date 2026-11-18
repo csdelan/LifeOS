@@ -74,6 +74,54 @@ public sealed class CastGuardTests(PostgresFixture postgres, ClassDatabase class
         Assert.All(Checked.Values, c => Assert.Contains(c, constraints));
     }
 
+    /// <summary>
+    /// The functions too (code review CR146): a view that calls one throws when the function does,
+    /// and <c>bsk.recurrence_occurrences</c>, which every habit read calls, cast a pattern's
+    /// <c>every</c> and <c>day</c> to int unchecked.
+    /// </summary>
+    [Fact]
+    public async Task Every_cast_of_a_json_value_in_a_function_is_guarded()
+    {
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        var functions = (await connection.QueryAsync<(string Name, string Body)>(new CommandDefinition(
+            """
+            SELECT n.nspname || '.' || p.proname, p.prosrc
+            FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+            WHERE n.nspname IN ('bsk', 'bsk_derived') ORDER BY 1;
+            """, cancellationToken: Ct))).ToList();
+        Assert.Contains(functions, f => f.Name == "bsk.recurrence_occurrences");
+
+        var unguarded = functions.SelectMany(f => Unguarded(f.Name, f.Body)).ToHashSet();
+        Assert.True(unguarded.SetEquals(FunctionCasts.Keys),
+            $"Unguarded and not listed: {string.Join("; ", unguarded.Except(FunctionCasts.Keys))}. Listed but not found: {string.Join("; ", FunctionCasts.Keys.Except(unguarded))}.");
+    }
+
+    /// <summary>Casts in a function that only a checked value reaches, and why.</summary>
+    private static readonly Dictionary<string, string> FunctionCasts = new()
+    {
+        ["bsk.is_archived boolean e.payload->>'archived'"] = "event_archive_change_archived_check allows only a boolean or null, as for bsk.v_metric",
+        ["bsk.json_int numeric value#>>'{}'"] = "its CASE tests jsonb_typeof(value) = 'number', the same value unwrapped",
+        ["bsk.json_num numeric value#>>'{}'"] = "its CASE tests jsonb_typeof(value) = 'number', the same value unwrapped",
+        ["bsk.recurrence_from_text integer j->>'intervalDays'"] = "the IF around it tests the same path with a digits pattern",
+    };
+
+    [Theory]
+    [InlineData("""{"freq":"interval","every":1.5,"unit":"days"}""", 0)]
+    [InlineData("""{"freq":"interval","every":"2nd","unit":"weeks"}""", 0)]
+    [InlineData("""{"freq":"monthly","day":"first"}""", 0)]
+    [InlineData("""{"freq":"weekly","on":"mon"}""", 0)]
+    [InlineData("""{"freq":"interval","every":2,"unit":"days"}""", 5)]
+    [InlineData("""{"freq":"interval","every":"2","unit":"days"}""", 5)]
+    public async Task A_repeat_pattern_reads_a_number_it_cant_use_as_no_dates(string pattern, int dates)
+    {
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        var found = await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.recurrence_occurrences(@pattern::jsonb, '2026-11-01', '2026-11-01', '2026-11-10');",
+            new { pattern }, cancellationToken: Ct));
+
+        Assert.Equal(dates, found);
+    }
+
     [Fact]
     public void Every_cast_of_a_json_value_in_the_code_is_guarded()
     {
