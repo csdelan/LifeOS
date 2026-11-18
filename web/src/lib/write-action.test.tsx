@@ -152,6 +152,7 @@ const OWN_FAILURE_TOASTS: Record<string, string> = {
   "/src/components/food/log-food-sheet.tsx": "the meal is logged, and its photo didn't save",
   "/src/components/measurements/lab-visit-sheet.tsx": "the visit is saved, and its report didn't upload",
   "/src/components/journal/journal-editor.tsx": "it adds to the refusal that the entry is still in the editor",
+  "/src/components/activity/workout-sheet.tsx": "the note saves as the sheet closes, so its inline error is gone by the time it fails (CR144)",
   "/src/pages/gallery-page.tsx": "the gallery shows what a failure toast looks like",
 };
 
