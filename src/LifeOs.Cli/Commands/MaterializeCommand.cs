@@ -39,7 +39,8 @@ internal static class MaterializeCommand
 
             return Cli.RunAsync(asJson, async () =>
             {
-                if (!DateOnly.TryParse(throughText, CultureInfo.InvariantCulture, out var through))
+                // Only yyyy-MM-dd, as every door reads a day (code review CR140).
+                if (!DateOnly.TryParseExact(throughText.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var through))
                 {
                     throw new ArgumentException($"'{throughText}' is not a valid date (expected YYYY-MM-DD).");
                 }

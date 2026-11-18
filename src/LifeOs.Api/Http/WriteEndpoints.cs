@@ -493,7 +493,11 @@ public static class WriteEndpoints
         return attributes;
     }
 
-    /// <summary>The occurrence date asked for, or null for today in the home zone (the service's default).</summary>
+    /// <summary>
+    /// The occurrence date asked for, or null for today in the home zone (the service's default).
+    /// Only <c>yyyy-MM-dd</c>: a lenient parse read <c>03/04/2026</c> as 4 March and wrote the
+    /// check-off there for good (code review CR140).
+    /// </summary>
     private static DateOnly? ParseOccurrence(string? text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -501,7 +505,7 @@ public static class WriteEndpoints
             return null;
         }
 
-        if (!DateOnly.TryParse(text, CultureInfo.InvariantCulture, out var date))
+        if (!DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
             throw new ArgumentException($"'{text}' is not a valid date (expected YYYY-MM-DD).");
         }

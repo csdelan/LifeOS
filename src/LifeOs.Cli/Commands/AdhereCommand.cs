@@ -91,7 +91,8 @@ internal static class AdhereCommand
             return null;
         }
 
-        if (!DateOnly.TryParse(text, CultureInfo.InvariantCulture, out var date))
+        // Only yyyy-MM-dd, as every door reads a day (code review CR140).
+        if (!DateOnly.TryParseExact(text.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
         {
             throw new ArgumentException($"'{text}' is not a valid date (expected YYYY-MM-DD).");
         }
