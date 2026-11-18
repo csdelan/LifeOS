@@ -77,8 +77,11 @@ export interface Effect<K extends Name> {
 export const moves = {
   /** One subject's own reads: its detail, its list row and its history (renames and attribute changes leave events). */
   subject: (id: string): QueryKeys => [qk.subject(id), qk.listItem(id), qk.history(id)],
-  /** Everywhere subjects are listed: the lists, Browse and the Map (all under `qk.subjects`), and Focus. */
-  subjectLists: [qk.subjects, qk.dashboard] as QueryKeys,
+  /**
+   * Everywhere subjects are listed: the lists, Browse and the Map (all under `qk.subjects`), Focus,
+   * and a review's recap of what was done (code review CR143).
+   */
+  subjectLists: [qk.subjects, qk.dashboard, qk.recap] as QueryKeys,
   /** What an earn or a give-back moves (REWARD-1): the wallet, the ledger and the life domains. */
   earnings: [qk.wallet, qk.ledger, qk.domains] as QueryKeys,
   /**
@@ -209,7 +212,8 @@ export const writeEffects: { [K in Name]: Effect<K> } = {
       optimisticAdhere(qc, habit, state === "missed" ? "not_followed" : state, opts?.on),
     says: (_, [, state]) => (state === "followed" ? "Marked followed" : state === "partial" ? "Partial credit" : "Marked missed"),
     earns: true,
-    refreshes: () => [qk.habits, qk.occurrences, qk.dashboard, ...moves.earnings],
+    // A review's recap lists the period's check-offs (code review CR143).
+    refreshes: () => [qk.habits, qk.occurrences, qk.dashboard, qk.recap, ...moves.earnings],
   },
   settleDomains: {
     earns: true,

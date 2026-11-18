@@ -666,4 +666,6 @@ built.
   leniently but the Pilot's own text boxes; from P3's day parsers, in part); CR141 (the Pilot
   offers a Goal under a Goal, and its parent map, Drop statuses and terminal words are compared
   with the kernel's; R30's vocabulary part); CR142 (the lists `v_metric` and `v_review` copy
-  from C# are compared with it, R27 in part).
+  from C# are compared with it, R27 in part); CR143 (a review's recap refreshes after a subject
+  write or a check-off, and every cached read is refreshed by some write or listed with why none
+  changes it; from P3).
