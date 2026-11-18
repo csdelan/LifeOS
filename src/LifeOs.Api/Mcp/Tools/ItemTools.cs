@@ -107,7 +107,7 @@ public sealed class ItemTools(SubjectReader subjects, McpReads reads, McpOptions
         var detail = await FindAsync(id, cancellationToken);
 
         // The newest few of each, cut in SQL (code review CR54).
-        var journal = (await subjects.GetJournalAsync(detail.Id, HistoryLimit, cancellationToken))
+        var journal = (await subjects.GetJournalAsync(detail.Id, HistoryLimit, cancellationToken: cancellationToken))
             .OrderByDescending(j => j.OccurredAt)
             .Select(j => new
             {

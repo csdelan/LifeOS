@@ -519,8 +519,18 @@ export interface ConcerningEvent {
   content?: string | null;
 }
 
-/** One recorded state_change in a subject's status history. */
-export type StatusHistoryEntry = ApiSchema<"StatusHistoryEntry">;
+/**
+ * One change in an item's history, newest first: a status change (`status`), or a rename or field
+ * change from and to (`changes`). `via` names the agent that made it through `/mcp`
+ * (agent-access plan §5.6 step 2.4); null when Chris or LifeOS did.
+ */
+export type HistoryEntry = ApiSchema<"HistoryEntry">;
+
+/** One field a rename or field change changed. A value that isn't `plain` (a repeat pattern, a cover) is said only to have changed. */
+export type FieldChange = ApiSchema<"FieldChange">;
+
+/** The agent that wrote a row through `/mcp`: the AI-agent Person it acted as, by name ("via Claude"). */
+export type AgentVia = ApiSchema<"AgentVia">;
 
 /** An append-only journal entry (journal-kind event concerning the subject). */
 export type JournalEntry = ApiSchema<"JournalEntry">;
@@ -545,6 +555,11 @@ export interface InboxItem {
   needsTranscription?: boolean;
   /** The item's own tags: on the event for a raw capture, on the subject otherwise. */
   tags?: string[];
+  /**
+   * The agent that put it in the Inbox through `/mcp`, or, on a resolved row, the one that took it
+   * out (a dismiss); null when Chris did (step 2.4).
+   */
+  via?: AgentVia | null;
 }
 
 /**

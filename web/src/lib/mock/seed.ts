@@ -1,6 +1,7 @@
 import { addDays, nowIso, slugify, todayIso, startOfWeekMonday, endOfWeekSunday } from "@/lib/dates";
 import { dataUrlFor, silentWavDataUrl } from "@/lib/artifacts";
 import type {
+  AgentVia,
   Amounts,
   AreaRow,
   ArtifactRecord,
@@ -10,6 +11,7 @@ import type {
   FoodMealType,
   HabitOccurrenceRow,
   HabitRow,
+  HistoryEntry,
   InboxItem,
   InboxResolution,
   JournalEntry,
@@ -19,7 +21,6 @@ import type {
   Relation,
   RelationEdge,
   ReviewDoc,
-  StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   SubjectType,
@@ -32,6 +33,20 @@ import type { MockFocusChoice } from "@/lib/mock/focus-store";
 import { sceneById, storedCoverOf } from "@/lib/mock/covers";
 import { applyMultiplier, DomainProgress, gemsFor, HEALTH, rankAwardKey, type DomainDay } from "@/lib/mock/domain-fold";
 import { ensureSeries, repetitionRows } from "@/lib/mock/task-series";
+
+/**
+ * One status change as the mock keeps it, newest first per item: what the kernel's `state_change`
+ * holds, and the agent that made it through `/mcp` when one did (agent-access plan §5.6 step 2.4).
+ */
+export interface StatusChange {
+  id: string;
+  status: string;
+  occurredAt: string;
+  via?: AgentVia | null;
+}
+
+/** The seeded AI-agent Person whose writes the mock shows "via" (Compass, `person-compass`). */
+export const MOCK_AGENT_VIA: AgentVia = { name: "Compass", personId: "person-compass" };
 
 export interface MockEvent {
   id: string;
@@ -97,7 +112,12 @@ export interface MockState {
   edges: CanonicalEdge[];
   tagsByItem: Record<string, string[]>;
   journals: Record<string, JournalEntry[]>;
-  history: Record<string, StatusHistoryEntry[]>;
+  history: Record<string, StatusChange[]>;
+  /**
+   * Renames and field changes from and to, newest first per item, as `GET /api/subjects/{id}/history`
+   * answers them. Only seeded: the mock's own writes don't add to them (the mock is thin, CR10).
+   */
+  fieldChanges: Record<string, HistoryEntry[]>;
   concerning: Record<string, ConcerningEvent[]>;
   events: MockEvent[];
   artifacts: Record<string, ArtifactRecord>;
@@ -1070,6 +1090,15 @@ export function createSeed(): MockState {
         content: "Blazor would have shared types. It would also have capped the graph. Closed that door on purpose.",
       },
     ],
+    // An agent's note on the Map graph (step 2.4): the journal says "via Compass".
+    "task-graph": [
+      {
+        eventId: "j-5",
+        occurredAt: isoAgo(2),
+        content: "Split the graph work: the layered layout first, the force lens after.",
+        via: MOCK_AGENT_VIA,
+      },
+    ],
     "prob-sleep": [
       {
         eventId: "j-3",
@@ -1084,7 +1113,7 @@ export function createSeed(): MockState {
     ],
   };
 
-  const history: Record<string, StatusHistoryEntry[]> = {
+  const history: Record<string, StatusChange[]> = {
     "goal-half": [
       { id: "h-1", status: "New", occurredAt: isoAgo(900) },
       { id: "h-2", status: "Active", occurredAt: isoAgo(720) },
@@ -1105,9 +1134,10 @@ export function createSeed(): MockState {
       { id: "h-5", status: "Not started", occurredAt: isoAgo(30) },
       { id: "h-6", status: "Completed", occurredAt: isoAgo(8) },
     ],
+    // An agent started it (step 2.4): the history says "via Compass".
     "task-graph": [
+      { id: "h-12", status: "In progress", occurredAt: isoAgo(3), via: MOCK_AGENT_VIA },
       { id: "h-11", status: "Not started", occurredAt: isoAgo(16) },
-      { id: "h-12", status: "In progress", occurredAt: isoAgo(3) },
     ],
     "prob-sleep": [
       { id: "h-13", status: "Open", occurredAt: isoAgo(200) },
@@ -1125,6 +1155,27 @@ export function createSeed(): MockState {
     "proj-web": [
       { id: "h-20", status: "New", occurredAt: isoAgo(170) },
       { id: "h-21", status: "Active", occurredAt: isoAgo(150) },
+    ],
+  };
+
+  // An agent moved the Map graph's dates and set its priority, after Chris renamed it.
+  const fieldChanges: Record<string, HistoryEntry[]> = {
+    "task-graph": [
+      {
+        id: "f-2",
+        occurredAt: isoAgo(2),
+        changes: [
+          { field: "due", from: t(1), to: t(3), plain: true },
+          { field: "priority", from: null, to: "High", plain: true },
+        ],
+        via: MOCK_AGENT_VIA,
+      },
+      {
+        id: "f-1",
+        occurredAt: isoAgo(12),
+        changes: [{ field: "title", from: "Map graph view", to: "Ship the Map graph view", plain: true }],
+        via: null,
+      },
     ],
   };
 
@@ -1177,6 +1228,7 @@ export function createSeed(): MockState {
       triagedAt: isoAgo(5),
       eventKind: "observation",
       eventContent: "Camping logistics has no next action and the weekend is 20 days out.",
+      via: MOCK_AGENT_VIA,
     },
     {
       itemId: "inbox-5",
@@ -1686,6 +1738,7 @@ export function createSeed(): MockState {
     tagsByItem,
     journals,
     history,
+    fieldChanges,
     concerning,
     events,
     artifacts,

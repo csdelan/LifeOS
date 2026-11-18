@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { inboxItemTitle } from "@/lib/capture";
 import { mockReads } from "@/lib/mock/api";
+import { MOCK_AGENT_VIA } from "@/lib/mock/seed";
 import { captureNote, getState, removeInbox, resetStore } from "@/lib/mock/store";
 import { InboxPage } from "@/pages/inbox-page";
 
@@ -111,5 +112,26 @@ describe("Inbox: Resolved's Load older (code review CR76)", () => {
     expect(rows.length).toBeLessThan(50);
     await screen.findAllByRole("listitem");
     expect(screen.queryByRole("button", { name: "Load older" })).not.toBeInTheDocument();
+  });
+});
+
+// "via Claude" (agent-access plan §5.6 step 2.4): an item an agent put in the Inbox says which, and
+// so does one an agent took out; Chris's own say nothing.
+describe("Inbox: the agent that put an item there or took it out", () => {
+  it("says via the agent's Person on the item it captured, and nothing on Chris's", async () => {
+    renderInbox();
+    const agents = await screen.findAllByRole("button", { name: /via Compass/ });
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toHaveTextContent("Camping logistics has no next action");
+    for (const chris of screen.getAllByRole("button", { name: /Lower back after long coding days/ })) {
+      expect(chris).not.toHaveTextContent("via");
+    }
+  });
+
+  it("says via the agent on an item it dismissed", async () => {
+    getState().resolved[0].row.via = MOCK_AGENT_VIA;
+    renderInbox("resolved");
+    const row = await screen.findByRole("button", { name: /cheaper phone plan/ });
+    expect(row).toHaveTextContent(/Dismissed .* · via Compass/);
   });
 });

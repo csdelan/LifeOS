@@ -2401,6 +2401,11 @@ export interface components {
             /** Format: int32 */
             refusedThisWeek: number;
         };
+        AgentVia: {
+            name: string;
+            /** Format: uuid */
+            personId: null | string;
+        };
         AgentsRead: {
             mcpEnabled: boolean;
             writes: string;
@@ -2998,6 +3003,12 @@ export interface components {
             /** Format: int32 */
             mealsDuring: number;
         };
+        FieldChange: {
+            field: string;
+            from?: null | string;
+            to?: null | string;
+            plain: boolean;
+        };
         FixNextRow: {
             /** Format: uuid */
             spaceId: string;
@@ -3253,6 +3264,15 @@ export interface components {
             adherenceIsCustom: boolean;
             windowIsCustom: boolean;
         };
+        HistoryEntry: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            status?: null | string;
+            changes: components["schemas"]["FieldChange"][];
+            via?: null | components["schemas"]["AgentVia"];
+        };
         HomeDayRow: {
             day: string;
             /** Format: double */
@@ -3323,6 +3343,7 @@ export interface components {
             tags: string[];
             attachment?: null | components["schemas"]["ArtifactRecord"];
             needsTranscription: boolean;
+            via?: null | components["schemas"]["AgentVia"];
         };
         InvolveBody: {
             subject?: string;
@@ -3343,6 +3364,7 @@ export interface components {
             /** Format: date-time */
             occurredAt: string;
             content: string;
+            via?: null | components["schemas"]["AgentVia"];
         };
         LabReportRow: {
             /** Format: uuid */
@@ -3806,6 +3828,7 @@ export interface components {
             tags: string[];
             attachment?: null | components["schemas"]["ArtifactRecord"];
             needsTranscription: boolean;
+            via?: null | components["schemas"]["AgentVia"];
         };
         ReviewReflectionRow: {
             path?: string;
@@ -4068,13 +4091,6 @@ export interface components {
         StatusBody: {
             subject?: string;
             status?: string;
-        };
-        StatusHistoryEntry: {
-            status: string;
-            /** Format: date-time */
-            occurredAt: string;
-            /** Format: uuid */
-            id: string;
         };
         /** Format: binary */
         Stream: string;
@@ -4574,7 +4590,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["StatusHistoryEntry"][];
+                    "application/json": components["schemas"]["HistoryEntry"][];
                 };
             };
         };

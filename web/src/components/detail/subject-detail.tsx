@@ -496,7 +496,7 @@ function ItemDetail({
             </Suspense>
           </TabsContent>
           <TabsContent value="history">
-            <HistoryTab subjectId={subject.id} />
+            <HistoryTab subjectId={subject.id} type={subject.type} />
           </TabsContent>
         </div>
       </Tabs>

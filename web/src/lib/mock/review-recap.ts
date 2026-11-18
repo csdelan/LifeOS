@@ -4,9 +4,9 @@ import type {
   HabitOccurrenceRow,
   InboxItem,
   SeriesRepetitions,
-  StatusHistoryEntry,
   SubjectListItem,
 } from "@/lib/production-ui-types";
+import type { StatusChange } from "@/lib/mock/seed";
 import type { RecapItem, RecapSection } from "@/lib/review-recap";
 import { repeatingSection } from "@/lib/review-recap";
 
@@ -15,7 +15,7 @@ export function composeRecap(input: {
   end: string;
   asOf: string;
   subjects: SubjectListItem[];
-  history: Record<string, StatusHistoryEntry[]>;
+  history: Record<string, StatusChange[]>;
   occurrences: HabitOccurrenceRow[];
   inbox: InboxItem[];
   /** Each repeating Task with its repetitions, for "Take out trash: 3 of 4 done". */

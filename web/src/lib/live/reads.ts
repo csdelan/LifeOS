@@ -37,7 +37,7 @@ import type {
   ResolvedInboxItem,
   ReviewDoc,
   RewardRow,
-  StatusHistoryEntry,
+  HistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
@@ -150,7 +150,7 @@ export const liveReads: LifeOsReads = {
     const data = await unwrap(
       api().GET("/api/subjects/{id}/history", { params: { path: { id }, query: { limit } } }),
     );
-    return fits<StatusHistoryEntry[]>()(data);
+    return fits<HistoryEntry[]>()(data);
   },
 
   async inbox() {

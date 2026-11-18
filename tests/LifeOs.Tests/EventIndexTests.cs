@@ -37,6 +37,17 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
             .Replace("@from", "'2026-11-02'", StringComparison.Ordinal)
             .Replace("@to", "'2026-11-08'", StringComparison.Ordinal);
 
+    /// <summary>An item's history as the web reads it, with no agents known.</summary>
+    private static string History()
+        => SubjectReader.HistorySql
+            .Replace("@agentSources", "'{}'", StringComparison.Ordinal)
+            .Replace("@agentPeople", "'{}'", StringComparison.Ordinal)
+            .Replace("@agentNames", "'{}'", StringComparison.Ordinal)
+            .Replace("@agentPrefix", "'mcp:'", StringComparison.Ordinal)
+            .Replace("@key", $"'{Id}'", StringComparison.Ordinal)
+            .Replace("@id", $"'{Id}'", StringComparison.Ordinal)
+            .Replace("@limit", "50", StringComparison.Ordinal);
+
     private static readonly Read[] Reads =
     [
         new("habit check-offs", "SELECT * FROM bsk_derived.habit_occurrence_source;", "event_activity_occurrence_idx", false),
@@ -123,6 +134,8 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("one space rating", $"SELECT * FROM bsk.v_space_rating WHERE rating_key = '{Id}';", "event_space_rating_idx", true),
         new("a subject's status", $"SELECT * FROM bsk_derived.subject_current_source WHERE subject_id = '{Id}';",
             "event_state_change_subject", true),
+        // Agent-access plan §5.6 step 2.4: an item's history, its status changes by this index.
+        new("an item's history", History(), "event_state_change_subject", true),
         new("an item's due awards", $"SELECT * FROM bsk.v_reward_due WHERE subject_id = '{Id}';", "event_state_change_subject", true),
         new("one review", $"SELECT * FROM bsk.v_review WHERE id = '{Id}';", "event_state_change_subject", true),
         new("one space", $"SELECT * FROM bsk.v_space WHERE id = '{Id}';", "event_archive_change_subject", true),

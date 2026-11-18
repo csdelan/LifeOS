@@ -21,6 +21,7 @@ import type { InboxItem, ResolvedInboxItem, SubjectListItem, SubjectType } from 
 import { inboxItemBody, inboxItemTitle } from "@/lib/capture";
 import { useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
+import { ViaAgent } from "@/components/primitives/via-agent";
 import { splitTags } from "@/lib/tag-suggest";
 import { cn } from "@/lib/utils";
 import { useWriteAction } from "@/lib/write-action";
@@ -158,6 +159,12 @@ export function InboxPreview({
         <ItemHeading item={item} />
         <p className="mt-2 text-xs text-muted-foreground">
           Flagged {formatTimestamp(item.triagedAt)}
+          {item.via ? (
+            <>
+              {" "}
+              <ViaAgent via={item.via} />
+            </>
+          ) : null}
         </p>
       </div>
 
@@ -280,6 +287,12 @@ export function ResolvedPreview({
         <ItemHeading item={item} />
         <p className="mt-2 text-xs text-muted-foreground">
           {resolutionLabel(item)} {formatTimestamp(item.resolvedAt)}
+          {item.via ? (
+            <>
+              {" "}
+              <ViaAgent via={item.via} />
+            </>
+          ) : null}
         </p>
       </div>
 

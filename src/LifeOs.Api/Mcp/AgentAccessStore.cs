@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using Dapper;
+using LifeOs.Api.Read;
+using LifeOs.Domain;
 using Npgsql;
 
 namespace LifeOs.Api.Mcp;
@@ -68,6 +70,20 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
             """,
             new { clientId },
             cancellationToken: cancellationToken));
+    }
+
+    /// <summary>
+    /// Every client ever allowed, revoked ones too, by the source its events carry, with the Person
+    /// it acts as now: what the web's reads need to say which agent wrote a row (agent-access plan
+    /// §5.6 step 2.4). A revoked or replaced client's past writes still say whose they were.
+    /// </summary>
+    public async Task<AgentSources> SourcesAsync(CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        var rows = await connection.QueryAsync<(string ClientId, string Name, Guid? PersonId)>(new CommandDefinition(
+            "SELECT client_id, name, person_id FROM bsk_ops.agent_client ORDER BY client_id;",
+            cancellationToken: cancellationToken));
+        return new AgentSources(rows.Select(r => new AgentSource(KernelSources.Agent(r.ClientId), r.PersonId, r.Name)).ToList());
     }
 
     /// <summary>

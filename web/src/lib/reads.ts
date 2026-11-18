@@ -27,6 +27,7 @@ import type {
   FoodDaysRead,
   HabitOccurrenceRow,
   HabitRow,
+  HistoryEntry,
   HomeDaysRead,
   InboxItem,
   JournalEntry,
@@ -43,7 +44,6 @@ import type {
   SpacePhotosRead,
   SpaceRatingsRead,
   SpaceRow,
-  StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
@@ -121,7 +121,7 @@ export interface LifeOsReads extends MeasurementReads, BrowseReads {
   /** The newest `limit` journal entries (every one when left out), oldest first (code review CR121). */
   journal(id: string, limit?: number): Promise<JournalEntry[]>;
   /** The newest `limit` status changes (every one when left out), newest first (code review CR121). */
-  history(id: string, limit?: number): Promise<StatusHistoryEntry[]>;
+  history(id: string, limit?: number): Promise<HistoryEntry[]>;
   inbox(): Promise<InboxItem[]>;
   /** The newest `limit` (50 when left out) items to leave the Inbox, most recently resolved first (Back to Inbox). */
   inboxResolved(limit?: number): Promise<ResolvedInboxItem[]>;

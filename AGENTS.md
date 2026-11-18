@@ -31,6 +31,8 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   capture) up to that ceiling, can capture to the Inbox, journal, dismiss raw captures and link a
   review to its vault reflection, and at full change items and make new ones, as `mcp:<client_id>`. A write tool goes in
   `McpWriteAccess.ToolLevels` at the level it needs (`docs/pilot/agent-access-plan.md` §5).
+  Which agent wrote a row ("via Claude") is in `bsk_ops`, which the reader never reads, so a read
+  that says it takes `AgentSources` from `AgentAccessStore.SourcesAsync` (plan §5.3).
   A feature whose events carry a new payload key, or that owns an attribute key on items of any
   type (as rewards owns `bounty`), adds it to `McpAreas`: an event no area claims
   is hidden from agents while any area is switched off.

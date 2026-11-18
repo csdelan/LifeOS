@@ -428,7 +428,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/StatusHistoryEntry"
+                    "$ref": "#/components/schemas/HistoryEntry"
                   }
                 }
               }
@@ -7150,6 +7150,25 @@
           }
         }
       },
+      "AgentVia": {
+        "required": [
+          "name",
+          "personId"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "personId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
+          }
+        }
+      },
       "AgentsRead": {
         "required": [
           "mcpEnabled",
@@ -9304,6 +9323,33 @@
           }
         }
       },
+      "FieldChange": {
+        "required": [
+          "field",
+          "plain"
+        ],
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "from": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "to": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "plain": {
+            "type": "boolean"
+          }
+        }
+      },
       "FixNextRow": {
         "required": [
           "spaceId",
@@ -10241,6 +10287,46 @@
           }
         }
       },
+      "HistoryEntry": {
+        "required": [
+          "id",
+          "occurredAt",
+          "changes"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldChange"
+            }
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentVia"
+              }
+            ]
+          }
+        }
+      },
       "HomeDayRow": {
         "required": [
           "day",
@@ -10509,6 +10595,16 @@
           },
           "needsTranscription": {
             "type": "boolean"
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentVia"
+              }
+            ]
           }
         }
       },
@@ -10566,6 +10662,16 @@
           },
           "content": {
             "type": "string"
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentVia"
+              }
+            ]
           }
         }
       },
@@ -12318,6 +12424,16 @@
           },
           "needsTranscription": {
             "type": "boolean"
+          },
+          "via": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentVia"
+              }
+            ]
           }
         }
       },
@@ -13218,27 +13334,6 @@
           },
           "status": {
             "type": "string"
-          }
-        }
-      },
-      "StatusHistoryEntry": {
-        "required": [
-          "status",
-          "occurredAt",
-          "id"
-        ],
-        "type": "object",
-        "properties": {
-          "status": {
-            "type": "string"
-          },
-          "occurredAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "id": {
-            "type": "string",
-            "format": "uuid"
           }
         }
       },

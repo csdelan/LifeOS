@@ -204,12 +204,70 @@ public sealed class ConcerningEvent
     public string? Content { get; set; }
 }
 
-/// <summary>One recorded <c>state_change</c> in the subject's status history.</summary>
+/// <summary>One recorded <c>state_change</c> in the subject's status history (an agent's <c>get_item</c>).</summary>
 public sealed class StatusHistoryEntry
 {
     public string Status { get; set; } = "";
     public DateTime OccurredAt { get; set; }
     public Guid Id { get; set; }
+}
+
+/// <summary>
+/// One change in an item's history (<c>GET /api/subjects/{id}/history</c>), newest first: a status
+/// change, or a rename or field change from and to (<c>attribute_change</c>, code review CR24).
+/// </summary>
+public sealed class HistoryEntry
+{
+    /// <summary>The event's id.</summary>
+    public Guid Id { get; set; }
+
+    public DateTime OccurredAt { get; set; }
+
+    /// <summary>The status it moved to, on a status change; null on a field change.</summary>
+    public string? Status { get; set; }
+
+    /// <summary>What a rename or field change changed, the title first; empty on a status change.</summary>
+    public IReadOnlyList<FieldChange> Changes { get; set; } = [];
+
+    /// <summary>The agent that made it through <c>/mcp</c>; null when Chris or LifeOS did.</summary>
+    public AgentVia? Via { get; set; }
+}
+
+/// <summary>One field a rename or field change changed, from and to.</summary>
+public sealed class FieldChange
+{
+    /// <summary><c>title</c>, or the attribute's key: <c>due</c>, <c>priority</c>, <c>area</c>, ...</summary>
+    public string Field { get; set; } = "";
+
+    /// <summary>
+    /// What it was, as text (an area by its name, cut to 280 characters); null when it had none, or
+    /// when the value isn't <see cref="Plain"/>.
+    /// </summary>
+    public string? From { get; set; }
+
+    /// <summary>What it became, as <see cref="From"/> says; null when it was cleared.</summary>
+    public string? To { get; set; }
+
+    /// <summary>
+    /// Whether the values are plain ones the history shows. A repeat pattern, a cover or a bounty
+    /// isn't, so the history says only that it changed.
+    /// </summary>
+    public bool Plain { get; set; } = true;
+}
+
+/// <summary>
+/// The agent that wrote a row through <c>/mcp</c> (AGENT-2, agent-access plan §5.3), so the web says
+/// "via Claude": the AI-agent Person it acted as, by the Person's name now. Its members are
+/// <c>required</c> because it's reached only inside a row, where the web document would otherwise
+/// mark them optional (as <see cref="FocusGoal"/> says).
+/// </summary>
+public sealed class AgentVia
+{
+    /// <summary>The Person's name; the client's own when it acts as no Person now.</summary>
+    public required string Name { get; set; }
+
+    /// <summary>The agent's Person; null when its client acts as none.</summary>
+    public required Guid? PersonId { get; set; }
 }
 
 /// <summary>The command palette's search: the best matches, and how many match in all (code review CR76).</summary>
@@ -245,6 +303,9 @@ public sealed class InboxItem
     public ArtifactRecord? Attachment { get; set; }
     /// <summary>A voice note with no transcript: its audio is kept for later processing (CAP-2).</summary>
     public bool NeedsTranscription { get; set; }
+
+    /// <summary>The agent that put it in the Inbox through <c>/mcp</c>; null when Chris did.</summary>
+    public AgentVia? Via { get; set; }
 }
 
 /// <summary>
@@ -270,6 +331,12 @@ public sealed class ResolvedInboxItem
     public string[] Tags { get; set; } = [];
     public ArtifactRecord? Attachment { get; set; }
     public bool NeedsTranscription { get; set; }
+
+    /// <summary>
+    /// The agent that took it out of the Inbox through <c>/mcp</c> (a dismiss); null when Chris did,
+    /// or when a status did.
+    /// </summary>
+    public AgentVia? Via { get; set; }
 }
 
 /// <summary>
@@ -509,6 +576,9 @@ public sealed class JournalEntry
     public Guid EventId { get; set; }
     public DateTime OccurredAt { get; set; }
     public string Content { get; set; } = "";
+
+    /// <summary>The agent that wrote it through <c>/mcp</c>; null when Chris did.</summary>
+    public AgentVia? Via { get; set; }
 }
 
 public sealed class CreatedSubject

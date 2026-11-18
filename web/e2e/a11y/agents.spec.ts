@@ -32,6 +32,28 @@ test.describe("accessibility: connected agents", () => {
     });
   }
 
+  // "via Claude" (step 2.4): an item's history with an agent's field and status changes, its
+  // journal, and the Inbox with an agent's capture, in both themes. The Map's graph isn't this
+  // feature's and is scanned on its own page.
+  for (const theme of ["dark", "light"] as const) {
+    test(`axe serious/critical: what an agent wrote, via its Person, ${theme} theme`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.addInitScript((t) => localStorage.setItem("theme", t), theme);
+      await page.goto("/map?selected=task-graph");
+      await page.getByRole("tab", { name: "History" }).click();
+      await expect(page.getByRole("tabpanel", { name: "History" }).getByText("via Compass").first()).toBeVisible();
+      await expectAccessible(page, { exclude: ".react-flow" });
+
+      await page.getByRole("tab", { name: "Journal" }).click();
+      await expect(page.getByRole("tabpanel", { name: "Journal" }).getByText("via Compass")).toBeVisible();
+      await expectAccessible(page, { exclude: ".react-flow" });
+
+      await page.goto("/inbox");
+      await expect(page.getByText("via Compass").first()).toBeVisible();
+      await expectAccessible(page);
+    });
+  }
+
   test("axe serious/critical: Connected agents on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.emulateMedia({ reducedMotion: "reduce" });

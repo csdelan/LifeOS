@@ -1,4 +1,5 @@
 import { AttachmentChip } from "@/components/artifacts/attachment-chip";
+import { ViaAgent } from "@/components/primitives/via-agent";
 import type { InboxItem } from "@/lib/production-ui-types";
 import { inboxItemTitle } from "@/lib/capture";
 import { formatTimestamp } from "@/lib/dates";
@@ -22,6 +23,12 @@ export function InboxRow({ item }: { item: InboxItem }) {
         {inboxKindLabel(item)}
         {" · "}
         {isResolved(item) ? `${resolutionLabel(item)} ${formatTimestamp(item.resolvedAt)}` : formatTimestamp(item.triagedAt)}
+        {item.via ? (
+          <>
+            {" · "}
+            <ViaAgent via={item.via} />
+          </>
+        ) : null}
         {tags.length ? ` · ${tags.map((t) => `#${t}`).join(" ")}` : null}
       </p>
       {item.attachment ? <AttachmentChip artifact={item.attachment} compact /> : null}

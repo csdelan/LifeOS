@@ -1,4 +1,5 @@
 using LifeOs.Api.Auth;
+using LifeOs.Api.Mcp;
 using LifeOs.Api.Read;
 
 namespace LifeOs.Api.Http;
@@ -34,7 +35,7 @@ public static class ReadEndpoints
         api.MapGet("/subjects/{id:guid}/journal", GetJournal).WithName("GetJournal")
             .Produces<IReadOnlyList<JournalEntry>>();
         api.MapGet("/subjects/{id:guid}/history", GetHistory).WithName("GetHistory")
-            .Produces<IReadOnlyList<StatusHistoryEntry>>();
+            .Produces<IReadOnlyList<HistoryEntry>>();
         api.MapGet("/subjects/{id:guid}/timer", GetTimer).WithName("GetTimer")
             .Produces<TaskTimer>().Produces(StatusCodes.Status404NotFound);
         api.MapGet("/subjects/{id:guid}/files", GetFiles).WithName("GetSubjectFiles")
@@ -165,13 +166,23 @@ public static class ReadEndpoints
     private static async Task<IResult> GetTags(Guid id, SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetTagsAsync(id, cancellationToken: cancellationToken)));
 
-    /// <summary>The item's journal, oldest first; with <c>limit</c>, only the newest that many (code review CR54).</summary>
-    private static async Task<IResult> GetJournal(Guid id, int? limit, SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetJournalAsync(id, HistoryLimit(limit), cancellationToken)));
+    /// <summary>
+    /// The item's journal, oldest first; with <c>limit</c>, only the newest that many (code review
+    /// CR54). An entry an agent wrote says which (agent-access plan §5.6 step 2.4).
+    /// </summary>
+    private static async Task<IResult> GetJournal(
+        Guid id, int? limit, SubjectReader reader, AgentAccessStore agents, CancellationToken cancellationToken)
+        => Results.Ok(await reader.GetJournalAsync(
+            id, HistoryLimit(limit), await agents.SourcesAsync(cancellationToken), cancellationToken));
 
-    /// <summary>The item's status changes, newest first; with <c>limit</c>, at most that many (code review CR54).</summary>
-    private static async Task<IResult> GetHistory(Guid id, int? limit, SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetStatusHistoryAsync(id, HistoryLimit(limit), cancellationToken)));
+    /// <summary>
+    /// The item's status changes, renames and field changes, newest first; with <c>limit</c>, at most
+    /// that many (code review CR54). One an agent made says which (step 2.4).
+    /// </summary>
+    private static async Task<IResult> GetHistory(
+        Guid id, int? limit, SubjectReader reader, AgentAccessStore agents, CancellationToken cancellationToken)
+        => Results.Ok(await reader.GetHistoryAsync(
+            id, HistoryLimit(limit), await agents.SourcesAsync(cancellationToken), cancellationToken));
 
     private static int? HistoryLimit(int? limit)
         => limit is null or (>= 1 and <= 1000)
@@ -184,12 +195,19 @@ public static class ReadEndpoints
     private static async Task<IResult> GetTagUniverse(SubjectReader reader, CancellationToken cancellationToken)
         => Results.Ok((await reader.GetTagUniverseAsync(cancellationToken: cancellationToken)));
 
-    private static async Task<IResult> GetInbox(SubjectReader reader, CancellationToken cancellationToken)
-        => Results.Ok((await reader.GetInboxAsync(cancellationToken: cancellationToken)));
+    /// <summary>What waits in the Inbox; an item an agent put there says which (step 2.4).</summary>
+    private static async Task<IResult> GetInbox(SubjectReader reader, AgentAccessStore agents, CancellationToken cancellationToken)
+        => Results.Ok(await reader.GetInboxAsync(
+            agents: await agents.SourcesAsync(cancellationToken), cancellationToken: cancellationToken));
 
-    /// <summary>The newest <paramref name="limit"/> (1 to 1000) items to leave the Inbox; Resolved's Load older asks for more (code review CR76).</summary>
-    private static async Task<IResult> GetResolvedInbox(SubjectReader reader, CancellationToken cancellationToken, int limit = 50)
-        => Results.Ok((await reader.GetResolvedInboxAsync(Math.Clamp(limit, 1, 1000), cancellationToken: cancellationToken)));
+    /// <summary>
+    /// The newest <paramref name="limit"/> (1 to 1000) items to leave the Inbox; Resolved's Load older
+    /// asks for more (code review CR76). One an agent dismissed says which (step 2.4).
+    /// </summary>
+    private static async Task<IResult> GetResolvedInbox(
+        SubjectReader reader, AgentAccessStore agents, CancellationToken cancellationToken, int limit = 50)
+        => Results.Ok(await reader.GetResolvedInboxAsync(
+            Math.Clamp(limit, 1, 1000), await agents.SourcesAsync(cancellationToken), cancellationToken));
 
     /// <summary>How many items wait in the Inbox: Focus shows the number, not the rows (code review CR76).</summary>
     private static async Task<IResult> CountInbox(SubjectReader reader, CancellationToken cancellationToken)

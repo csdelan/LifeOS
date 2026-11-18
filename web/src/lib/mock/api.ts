@@ -32,6 +32,7 @@ import type {
   OuraStatus,
   HabitOccurrenceRow,
   HabitRow,
+  HistoryEntry,
   InboxItem,
   JournalEntry,
   LedgerDay,
@@ -40,7 +41,6 @@ import type {
   RelationEdge,
   ResolvedInboxItem,
   RewardRow,
-  StatusHistoryEntry,
   SubjectDetail,
   SubjectListItem,
   TagUniverseItem,
@@ -280,10 +280,15 @@ export const mockReads: LifeOsReads = {
     return limit == null ? entries : entries.slice(Math.max(0, entries.length - limit));
   },
 
-  async history(id: string, limit?: number): Promise<StatusHistoryEntry[]> {
+  async history(id: string, limit?: number): Promise<HistoryEntry[]> {
     await wait();
-    const changes = storeState().history[id] ?? [];
-    return limit == null ? changes : changes.slice(0, limit);
+    // Status changes and field changes, newest first, as the API merges them.
+    const state = storeState();
+    const entries: HistoryEntry[] = [
+      ...(state.history[id] ?? []).map((h) => ({ id: h.id, occurredAt: h.occurredAt, status: h.status, changes: [], via: h.via ?? null })),
+      ...(state.fieldChanges[id] ?? []),
+    ].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+    return limit == null ? entries : entries.slice(0, limit);
   },
 
   async inbox(): Promise<InboxItem[]> {

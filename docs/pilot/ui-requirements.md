@@ -4668,7 +4668,8 @@ from that; Chris to confirm.)*
   and `link_reflection` (plan §5.2). `full` (status, check-offs, timers, create, relate, tag,
   meals) is built for items since 2026-11-18 (plan §5.6 step 2.3): `set_status`, `update_item`,
   `create_item`, `tag` and `link`; check-offs, timers and meals are step 2.6. A repeating Task's
-  pattern and a Review stay Chris's.
+  pattern and a Review stay Chris's. The web says "via <Person>" on an item's history, its journal
+  and the Inbox, and the History tab shows field changes from and to (step 2.4, 2026-11-18).
 - Implications: a `request_id` makes a retry write once. Nothing an agent can do deletes
   anything, and some writes have no tool at any level: archive, any delete, rewards, exception
   days, Oura, covers (plan §5.2). Undo is the kernel's usual: a status set back, a capture

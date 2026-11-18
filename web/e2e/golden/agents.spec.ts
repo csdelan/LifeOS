@@ -45,6 +45,25 @@ test.describe("golden paths: connected agents", () => {
     await expect(claude).toHaveCount(0);
   });
 
+  // "via Claude" (agent-access plan §5.6 step 2.4): what an agent wrote says which, by the Person it
+  // acts as. The mock's Compass started the Map graph Task, moved its due date, set its priority and
+  // wrote in its journal, and flagged a camping nudge to the Inbox; Chris renamed the Task himself.
+  test("what an agent wrote says via its Person: an item's history and journal, and the Inbox", async ({ page }) => {
+    await page.goto("/map?selected=task-graph");
+    await page.getByRole("tab", { name: "History" }).click();
+    const changes = page.getByRole("tabpanel", { name: "History" }).getByRole("listitem");
+    await expect(changes.first()).toContainText("Priority set to High");
+    await expect(changes.first()).toContainText("via Compass");
+    await expect(changes.filter({ hasText: "Map graph view → Ship the Map graph view" })).not.toContainText("via");
+
+    await page.getByRole("tab", { name: "Journal" }).click();
+    const entry = page.getByRole("tabpanel", { name: "Journal" }).getByRole("listitem").filter({ hasText: "layered layout first" });
+    await expect(entry).toContainText("via Compass");
+
+    await page.goto("/inbox");
+    await expect(page.getByRole("button", { name: /Camping logistics has no next action/ }).first()).toContainText("via Compass");
+  });
+
   test("an expired consent request says to start again", async ({ page }) => {
     await page.goto("/oauth/consent?authorization_id=mock-expired");
     await expect(page.getByRole("heading", { name: "This request can't be found" })).toBeVisible();

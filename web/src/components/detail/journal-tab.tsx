@@ -7,6 +7,7 @@ import { ListSkeleton } from "@/components/primitives/skeletons";
 import { JournalEditor } from "@/components/journal/journal-editor";
 import { looksLikeHtml, sanitizeJournalHtml } from "@/components/journal/journal-html";
 import { useServerPages } from "@/components/primitives/use-paged";
+import { ViaAgent } from "@/components/primitives/via-agent";
 import { useJournal, useWrites } from "@/lib/queries";
 import { formatTimestamp } from "@/lib/dates";
 
@@ -33,6 +34,12 @@ export function JournalTab({ subjectId }: { subjectId: string }) {
             <li key={e.eventId} className="rounded-lg bg-muted/50 px-3 py-2">
               <p className="text-[0.6875rem] text-muted-foreground">
                 {formatTimestamp(e.occurredAt)}
+                {e.via ? (
+                  <>
+                    {" · "}
+                    <ViaAgent via={e.via} />
+                  </>
+                ) : null}
               </p>
               {looksLikeHtml(e.content) ? (
                 <div

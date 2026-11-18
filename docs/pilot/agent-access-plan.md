@@ -969,11 +969,12 @@ Claude Code on PICARD signs in as too, and claude.ai lists the write tools. `ful
 `src/LifeOs.Api/Mcp/AgentWrites.cs` and `Mcp/Tools/CaptureTools.cs`; the tests:
 `tests/LifeOs.Tests/McpWriteTests.cs`.
 
-**2026-11-18:** steps 2.2 and 2.3 of §5.6 are built. `full` is accepted, each writing client
-has a level of its own (decision 7), and Connected agents shows it. At `full` an agent also has
-`set_status`, `update_item`, `create_item`, `tag` and `link` (§5.2): `src/LifeOs.Api/Mcp/AgentItemWrites.cs`
-and `Mcp/Tools/ItemWriteTools.cs`, tested in `tests/LifeOs.Tests/McpItemWriteTests.cs`. Staging
-stays at `capture` until step 2.5.
+**2026-11-18:** steps 2.2, 2.3 and 2.4 of §5.6 are built. `full` is accepted, each writing
+client has a level of its own (decision 7), and Connected agents shows it. At `full` an agent also
+has `set_status`, `update_item`, `create_item`, `tag` and `link` (§5.2): `src/LifeOs.Api/Mcp/AgentItemWrites.cs`
+and `Mcp/Tools/ItemWriteTools.cs`, tested in `tests/LifeOs.Tests/McpItemWriteTests.cs`. The web
+says "via <Person>" on what an agent wrote, and an item's History tab shows its field changes
+(§5.3, `tests/LifeOs.Tests/AgentViaTests.cs`). Staging stays at `capture` until step 2.5.
 
 ### 5.1 The switch
 
@@ -1088,8 +1089,25 @@ and clock with only the source changed, code review CR45), so every event it wri
 (captures, journal entries, Inbox flags, a dismiss's marker, a reflection link and a review it
 opens) has `source_id = mcp:<client_id>` and provenance `declared`. A capture, journal entry or
 reflection link also has `agent_person_id` in its payload: the Person the client acted as when it wrote. For the other events, the source names
-the client and `bsk_ops.agent_client` its Person (a replaced client keeps its own link). The
-web's "via Claude" isn't built yet.
+the client and `bsk_ops.agent_client` its Person (a replaced client keeps its own link).
+
+**"via Claude" in the web (step 2.4, 2026-11-18).** An item's history, its journal, the Inbox and
+the Inbox's resolved list say which agent wrote a row: `via` on each (`AgentVia`: the Person's name
+and id), shown as "via Compass" beside its time. The History tab (`GET /api/subjects/{id}/history`,
+now `HistoryEntry`) lists renames and field changes from and to beside the status changes, the
+title first, an area by its name, a value cut at 280 characters, and a repeat pattern, cover or
+bounty only as "changed". How a row is matched to its agent:
+- A capture, a journal entry and a reflection link name the Person the agent acted as when it
+  wrote (`agent_person_id`), and keep it if the client is later linked to another Person.
+- Any other event an agent wrote (a status change, a field change, an Inbox flag, a dismiss) is
+  matched by its source to the client and the Person the client acts as now; a client acting as
+  none is shown by its own name, and a source no client is known for as "an agent".
+- `bsk_reader` never reads `bsk_ops`, so the API reads the clients on its own connection
+  (`AgentAccessStore.SourcesAsync`) and hands them to the read (`AgentSources`); `/mcp`'s
+  `get_item` doesn't ask for them.
+- An Inbox item says the agent that flagged it; a resolved one, the agent that dismissed it. One a
+  status took out of the Inbox says none.
+- A tag or a link has no source (above), so it never says "via".
 
 The item tools (step 2.3) write the same way: a status change, its ledger entries, a rename or
 field change (an `attribute_change`, from and to) and a new item's first status all carry the
@@ -1183,7 +1201,7 @@ writing agent got the same level.
 | 2.1 | The `capture` level (above) | Done 2026-11-12, on for staging since 2026-11-13 |
 | 2.2 | Groundwork: `full` accepted; a level for each client (decision 7), listed and refused by level; Connected agents shows each agent's level; a status set to what it already is writes nothing; a create can carry a request id | Done 2026-11-18. Tests: a capture-level agent is listed and may call only the capture tools; a retried create makes one item; setting a status again writes nothing and pays nothing more |
 | 2.3 | Item tools at `full`: `set_status`, `update_item`, `create_item`, `tag`, `link`; the server instructions and the guide say what they do | Done 2026-11-18. Each tool's tests: refusals in words, items of a switched-off area refused, events carry the agent's source, the log holds what changed from and to (the web's history shows it with 2.4) |
-| 2.4 | "via Claude" in the web: status history, journal entries, the Inbox and field changes show the agent's Person | Web unit, golden and a11y tests. Lands before 2.5 |
+| 2.4 | "via Claude" in the web: status history, journal entries, the Inbox and field changes show the agent's Person | Done 2026-11-18 (§5.3): `AgentViaTests`, the web's history, journal and Inbox tests, and the golden and a11y specs in `agents.spec.ts`. Lands before 2.5 |
 | 2.5 | `full` on staging for Chris's chats, the sweep on its own connection at `capture` | A week of use; findings recorded here |
 | 2.6 | Records at `full`: `check_off_habit`, `timer`, `log_meal` (only with `food` on) | After a week of 2.3 |
 

@@ -644,53 +644,77 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
     /// <summary>
     /// The item's journal entries, oldest first; with <paramref name="limit"/>, only the newest
     /// that many, cut in SQL (code review CR54), so an item written about daily reads the same.
+    /// Each says the agent that wrote it, by <paramref name="agents"/> (step 2.4).
     /// </summary>
     public async Task<IReadOnlyList<JournalEntry>> GetJournalAsync(
-        Guid id, int? limit = null, CancellationToken cancellationToken = default)
+        Guid id, int? limit = null, AgentSources? agents = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
-        return (await db.QueryAsync<JournalEntry>(new CommandDefinition("""
+        return (await db.QueryAsync<JournalEntry, AgentVia?, JournalEntry>(new CommandDefinition($"""
             SELECT * FROM (
-                SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content
+                SELECT se.event_id, e.occurred_at, coalesce(a.content, '') AS content, {AgentSources.Columns}
                 FROM bsk.v_subject_event se
                 JOIN bsk.v_event e ON e.id = se.event_id
                 LEFT JOIN bsk.artifact a ON a.id = e.artifact_id
+                {AgentSources.Join("e.source_id", AgentSources.PayloadPerson("e"))}
                 WHERE se.subject_id = @id AND se.relation = 'concerns' AND e.kind = 'journal'
                 ORDER BY e.occurred_at DESC
                 LIMIT @limit
             ) newest
             ORDER BY occurred_at ASC
-            """, new { id, limit }, cancellationToken: cancellationToken))).AsList();
+            """, (agents ?? AgentSources.None).AddTo(new DynamicParameters(new { id, limit })), cancellationToken: cancellationToken),
+            Via,
+            splitOn: "name")).AsList();
+    }
+
+    private static JournalEntry Via(JournalEntry entry, AgentVia? via)
+    {
+        entry.Via = via;
+        return entry;
     }
 
     /// <summary>
     /// What waits in the Inbox, newest first, cut in SQL (code review CR54): at most
     /// <paramref name="limit"/> items, only <paramref name="itemId"/> when given, and none of a
-    /// type in <paramref name="hiddenTypes"/>.
+    /// type in <paramref name="hiddenTypes"/>. Each says the agent that put it there, by
+    /// <paramref name="agents"/> (step 2.4): the flag's source, and the Person a capture names.
     /// </summary>
     public async Task<IReadOnlyList<InboxItem>> GetInboxAsync(
         int? limit = null, Guid? itemId = null, IReadOnlyCollection<string>? hiddenTypes = null,
-        CancellationToken cancellationToken = default)
+        AgentSources? agents = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
-        return (await db.QueryAsync<InboxItem, ArtifactRecord?, InboxItem>(new CommandDefinition($"""
+        return (await db.QueryAsync<InboxItem, ArtifactRecord?, AgentVia?, InboxItem>(new CommandDefinition($"""
             SELECT i.item_id, i.item_kind, i.triaged_at,
                    i.subject_urn, i.subject_type, i.subject_title,
                    i.event_kind, i.event_content,
                    ARRAY(SELECT t.tag FROM bsk.v_item_tag t
                          WHERE t.item_kind = i.item_kind AND t.item_id = i.item_id
                          ORDER BY t.tag) AS tags,
-                   {AttachmentColumns}
+                   {AttachmentColumns},
+                   {AgentSources.Columns}
             FROM bsk.v_inbox i
             {AttachmentJoin("i")}
+            {FlaggedBy("i", "i.triage_event_id")}
             WHERE (@itemId::uuid IS NULL OR i.item_id = @itemId)
               AND (i.subject_type IS NULL OR NOT (i.subject_type = ANY(@hidden)))
             ORDER BY i.triaged_at DESC
             LIMIT @limit
-            """, new { limit, itemId, hidden = (hiddenTypes ?? []).ToArray() }, cancellationToken: cancellationToken),
+            """,
+            (agents ?? AgentSources.None).AddTo(new DynamicParameters(new { limit, itemId, hidden = (hiddenTypes ?? []).ToArray() })),
+            cancellationToken: cancellationToken),
             WithAttachment,
-            splitOn: "id")).AsList();
+            splitOn: "id,name")).AsList();
     }
+
+    // The agent that wrote an Inbox item's triage event (the flag, or a dismiss), with the Person a
+    // raw capture's payload names when it's one.
+    private static string FlaggedBy(string alias, string triageEvent) =>
+        $"""
+        LEFT JOIN bsk.event te ON te.id = {triageEvent}
+        LEFT JOIN bsk.event ce ON {alias}.item_kind = 'event' AND ce.id = {alias}.item_id
+        {AgentSources.Join("te.source_id", $"coalesce({AgentSources.PayloadPerson("te")}, {AgentSources.PayloadPerson("ce")})")}
+        """;
 
     // The file or audio an Inbox item carries (CAP-2 / CAP-4): a raw capture's own, or for an Idea
     // or Problem made from a capture, the earliest note or voice event concerning it that has bytes.
@@ -721,15 +745,17 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
         ) att ON true
         """;
 
-    private static InboxItem WithAttachment(InboxItem item, ArtifactRecord? attachment)
+    private static InboxItem WithAttachment(InboxItem item, ArtifactRecord? attachment, AgentVia? via)
     {
         item.Attachment = attachment;
+        item.Via = via;
         return item;
     }
 
-    private static ResolvedInboxItem WithAttachment(ResolvedInboxItem item, ArtifactRecord? attachment)
+    private static ResolvedInboxItem WithAttachment(ResolvedInboxItem item, ArtifactRecord? attachment, AgentVia? via)
     {
         item.Attachment = attachment;
+        item.Via = via;
         return item;
     }
 
@@ -782,12 +808,15 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
 
     /// <summary>
     /// Items that have left the inbox, most recently resolved first — the way back to
-    /// a dismissed capture. Capped at <paramref name="limit"/> rows.
+    /// a dismissed capture. Capped at <paramref name="limit"/> rows. Each says the agent that took
+    /// it out, by <paramref name="agents"/> (step 2.4): a dismiss's source. One a status took out
+    /// says none, since its newest triage is still the flag.
     /// </summary>
-    public async Task<IReadOnlyList<ResolvedInboxItem>> GetResolvedInboxAsync(int limit, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<ResolvedInboxItem>> GetResolvedInboxAsync(
+        int limit, AgentSources? agents = null, CancellationToken cancellationToken = default)
     {
         await using var db = await OpenAsync(cancellationToken);
-        return (await db.QueryAsync<ResolvedInboxItem, ArtifactRecord?, ResolvedInboxItem>(new CommandDefinition($"""
+        return (await db.QueryAsync<ResolvedInboxItem, ArtifactRecord?, AgentVia?, ResolvedInboxItem>(new CommandDefinition($"""
             SELECT r.item_id, r.item_kind, r.triaged_at,
                    r.resolution, r.resolved_at,
                    r.subject_status, r.subject_status_terminal,
@@ -796,14 +825,156 @@ public sealed class SubjectReader(NpgsqlDataSource dataSource, KernelSettings se
                    ARRAY(SELECT t.tag FROM bsk.v_item_tag t
                          WHERE t.item_kind = r.item_kind AND t.item_id = r.item_id
                          ORDER BY t.tag) AS tags,
-                   {AttachmentColumns}
+                   {AttachmentColumns},
+                   {AgentSources.Columns}
             FROM bsk.v_inbox_resolved r
             {AttachmentJoin("r")}
+            {FlaggedBy("r", "CASE WHEN r.resolution <> 'status' THEN r.triage_event_id END")}
             ORDER BY r.resolved_at DESC
             LIMIT @limit
-            """, new { limit }, cancellationToken: cancellationToken),
+            """, (agents ?? AgentSources.None).AddTo(new DynamicParameters(new { limit })), cancellationToken: cancellationToken),
             WithAttachment,
-            splitOn: "id")).AsList();
+            splitOn: "id,name")).AsList();
+    }
+
+    /// <summary>The longest field value an item's history shows.</summary>
+    public const int MaxHistoryValueLength = 280;
+
+    /// <summary>
+    /// An item's history (agent-access plan §5.6 step 2.4), newest first, at most
+    /// <paramref name="limit"/>: its status changes, and each rename or field change from and to
+    /// (<c>attribute_change</c>), each with the agent that made it by <paramref name="agents"/>.
+    /// Each kind is cut to the limit before they're merged, so neither reads past it.
+    /// </summary>
+    public async Task<IReadOnlyList<HistoryEntry>> GetHistoryAsync(
+        Guid id, int? limit = null, AgentSources? agents = null, CancellationToken cancellationToken = default)
+    {
+        await using var db = await OpenAsync(cancellationToken);
+        var rows = (await db.QueryAsync<HistoryRow>(new CommandDefinition(
+            HistorySql,
+            (agents ?? AgentSources.None).AddTo(new DynamicParameters(new { key = id.ToString(), id, limit })),
+            cancellationToken: cancellationToken))).AsList();
+        var entries = rows.Select(r => new HistoryEntry
+        {
+            Id = r.Id,
+            OccurredAt = r.OccurredAt,
+            Status = r.Payload is null ? r.Status : null,
+            Changes = r.Payload is null ? [] : FieldChanges(r.Payload),
+            Via = r.Name is null ? null : new AgentVia { Name = r.Name, PersonId = r.PersonId },
+        }).Where(e => e.Status is not null || e.Changes.Count > 0).ToList();
+
+        // An area is kept as its URN; the history says its name.
+        var areas = entries.SelectMany(e => e.Changes).Where(c => c is { Field: "area", Plain: true })
+            .SelectMany(c => new[] { c.From, c.To }).OfType<string>().Distinct(StringComparer.Ordinal).ToArray();
+        if (areas.Length > 0)
+        {
+            var names = (await db.QueryAsync<(string Urn, string Title)>(new CommandDefinition(
+                "SELECT urn, title FROM bsk.subject WHERE urn = ANY(@areas);", new { areas }, cancellationToken: cancellationToken)))
+                .ToDictionary(a => a.Urn, a => a.Title, StringComparer.Ordinal);
+            foreach (var change in entries.SelectMany(e => e.Changes).Where(c => c.Field == "area"))
+            {
+                change.From = change.From is { } from ? names.GetValueOrDefault(from, from) : null;
+                change.To = change.To is { } to ? names.GetValueOrDefault(to, to) : null;
+            }
+        }
+
+        return entries;
+    }
+
+    /// <summary>
+    /// The query <see cref="GetHistoryAsync"/> runs: an item's status changes by the
+    /// <c>event_state_change_subject</c> index on its id as text (<c>@key</c>), and its renames and
+    /// field changes by the events that concern it (<c>@id</c>).
+    /// </summary>
+    public static readonly string HistorySql = $"""
+        SELECT h.id, h.occurred_at, h.status, h.payload, {AgentSources.Columns}
+        FROM (
+            (SELECT e.id, e.occurred_at, e.recorded_at, e.source_id, e.payload->>'status' AS status,
+                    NULL::text AS payload, {AgentSources.PayloadPerson("e")} AS person
+             FROM bsk.event e
+             WHERE e.kind = 'state_change' AND e.payload->>'subject_id' = @key
+             ORDER BY e.occurred_at DESC
+             LIMIT @limit)
+            UNION ALL
+            (SELECT e.id, e.occurred_at, e.recorded_at, e.source_id, NULL, e.payload::text,
+                    {AgentSources.PayloadPerson("e")}
+             FROM bsk.subject_event se
+             JOIN bsk.event e ON e.id = se.event_id
+             WHERE se.subject_id = @id AND se.relation = 'concerns' AND e.kind = 'attribute_change'
+             ORDER BY e.occurred_at DESC
+             LIMIT @limit)
+        ) h
+        {AgentSources.Join("h.source_id", "h.person")}
+        ORDER BY h.occurred_at DESC, h.recorded_at DESC, h.id DESC
+        LIMIT @limit
+        """;
+
+    /// <summary>What an <c>attribute_change</c>'s payload changed: its title first, then each attribute.</summary>
+    private static List<FieldChange> FieldChanges(string payload)
+    {
+        var changes = new List<FieldChange>();
+        using var json = JsonDocument.Parse(payload);
+        if (json.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return changes;
+        }
+
+        if (json.RootElement.TryGetProperty("title", out var title) && title.ValueKind == JsonValueKind.Object)
+        {
+            changes.Add(FieldChangeOf("title", title));
+        }
+
+        if (json.RootElement.TryGetProperty("attributes", out var attributes) && attributes.ValueKind == JsonValueKind.Object)
+        {
+            changes.AddRange(attributes.EnumerateObject()
+                .Where(a => a.Value.ValueKind == JsonValueKind.Object)
+                .Select(a => FieldChangeOf(a.Name, a.Value)));
+        }
+
+        return changes;
+    }
+
+    private static FieldChange FieldChangeOf(string field, JsonElement change)
+    {
+        var from = change.TryGetProperty("from", out var f) ? f : default;
+        var to = change.TryGetProperty("to", out var t) ? t : default;
+        var plain = IsPlain(from) && IsPlain(to);
+        return new FieldChange { Field = field, Plain = plain, From = plain ? Text(from) : null, To = plain ? Text(to) : null };
+    }
+
+    private static bool IsPlain(JsonElement value) => value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array);
+
+    private static string? Text(JsonElement value)
+    {
+        var text = value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.GetRawText(),
+            _ => null,
+        };
+        if (text is null || text.Length <= MaxHistoryValueLength)
+        {
+            return text;
+        }
+
+        // Cut to fit with an ellipsis, never through a surrogate pair.
+        var cut = MaxHistoryValueLength - 1;
+        if (char.IsHighSurrogate(text[cut - 1]))
+        {
+            cut--;
+        }
+
+        return string.Concat(text.AsSpan(0, cut), "…");
+    }
+
+    private sealed class HistoryRow
+    {
+        public Guid Id { get; set; }
+        public DateTime OccurredAt { get; set; }
+        public string? Status { get; set; }
+        public string? Payload { get; set; }
+        public string? Name { get; set; }
+        public Guid? PersonId { get; set; }
     }
 
     /// <summary>The item's status changes, newest first; at most <paramref name="limit"/> when given (code review CR54).</summary>
