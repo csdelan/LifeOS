@@ -659,3 +659,6 @@ built.
   (Screens #9) was tried and put back: `FormDialog`'s guard takes its `aria-pressed` pickers for
   edits. The review's "Not fixed tonight" says why each of the rest waits.
 - **2026-11-18** at 2867e33: 6.6 (0.0; 6.56 from 6.60). [Review](../agents/quality-reviews/2026-11-18.md).
+  Built: CR139 (a create, a recurrence and a tag answer pending when their Inbox flag or a
+  repeating Task's follow-up fails after the commit, and every series follow-up in Application
+  runs through `AfterCommit`).

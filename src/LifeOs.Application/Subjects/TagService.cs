@@ -9,10 +9,13 @@ namespace LifeOs.Application.Subjects;
 /// an event (referenced by its id): a bare uuid that names an existing event is
 /// tagged as that event, otherwise the reference is resolved as a subject. Tags are
 /// normalized before they hit the store, and this verb is deliberately separate from
-/// <c>relate</c> / <c>link</c> — tags classify, relations connect.
+/// <c>relate</c> / <c>link</c> — tags classify, relations connect. A repeating Task's tags
+/// follow to its open repetitions after the tags' commit, so a failure there is answered as
+/// pending, never thrown (<see cref="AfterCommit"/>, code review CR139).
 /// </summary>
 public sealed class TagService(
-    SubjectService subjects, IEventReader events, ITagRepository tags, TaskSeriesService taskSeries)
+    SubjectService subjects, IEventReader events, ITagRepository tags, TaskSeriesService taskSeries,
+    AfterCommit afterCommit)
 {
     public async Task<TagResult> ApplyAsync(
         string reference, IEnumerable<string> add, IEnumerable<string> remove,
@@ -36,12 +39,20 @@ public sealed class TagService(
             : await tags.AddAsync(item.IsEvent, item.Id, toAdd, cancellationToken);
 
         // A repeating Task's tags follow to its open repetitions (D16).
+        var pending = false;
         if (!item.IsEvent)
         {
-            await taskSeries.FollowTagsAsync(item.Id, toAdd, toRemove, cancellationToken);
+            pending = (await afterCommit.RunAsync(
+                "carrying the tags to the open repetitions", item.Id.ToString(),
+                async ct =>
+                {
+                    await taskSeries.FollowTagsAsync(item.Id, toAdd, toRemove, ct);
+                    return true;
+                },
+                false)).Pending;
         }
 
-        return new TagResult(item, toAdd, toRemove, added, removed);
+        return new TagResult(item, toAdd, toRemove, added, removed) { FollowUpsPending = pending };
     }
 
     /// <summary>
@@ -105,4 +116,8 @@ public sealed record TagResult(
     IReadOnlyList<string> Added,
     IReadOnlyList<string> Removed,
     int AddedCount,
-    int RemovedCount);
+    int RemovedCount)
+{
+    /// <summary>True when carrying the tags to a repeating Task's open repetitions failed after the commit.</summary>
+    public bool FollowUpsPending { get; init; }
+}

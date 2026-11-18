@@ -13,11 +13,13 @@ namespace LifeOs.Application.Subjects;
 /// <para>
 /// On a Task the pattern makes it a repeating Task (D16): <see cref="TaskSeriesService"/>
 /// gives it a start and makes its first repetition, or re-dates the open one when the
-/// pattern changes. Once each week and after the last completion are for Tasks only.
+/// pattern changes. Once each week and after the last completion are for Tasks only. That
+/// runs after the pattern's commit, so a failure there is answered as pending, never thrown
+/// (<see cref="AfterCommit"/>, code review CR139).
 /// </para>
 /// </summary>
 public sealed class RecurrenceService(
-    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries)
+    SubjectService subjects, ISubjectRepository repository, TaskSeriesService taskSeries, AfterCommit afterCommit)
 {
     /// <summary>Sets the recurrence from a canonical recurrence JSON object string.</summary>
     public async Task<SubjectRef> SetAsync(
@@ -62,8 +64,10 @@ public sealed class RecurrenceService(
             throw new SubjectNotFoundException(reference);
         }
 
-        var made = await taskSeries.AfterPatternAsync(subject, start, cancellationToken);
-        return new RecurrenceResult(subject, canonical, made);
+        var made = await afterCommit.RunAsync(
+            "making the repeating task's repetitions", subject.Urn,
+            ct => taskSeries.AfterPatternAsync(subject, start, ct), (IReadOnlyList<SubjectRef>)[]);
+        return new RecurrenceResult(subject, canonical, made.Value) { FollowUpsPending = made.Pending };
     }
 
     /// <summary>Removes any recurrence from the subject.</summary>
@@ -85,4 +89,8 @@ public sealed class RecurrenceService(
 }
 
 /// <summary>A recurrence set: the subject, the pattern as stored, and any repetitions it made (D16).</summary>
-public sealed record RecurrenceResult(SubjectRef Subject, string Recurrence, IReadOnlyList<SubjectRef> Made);
+public sealed record RecurrenceResult(SubjectRef Subject, string Recurrence, IReadOnlyList<SubjectRef> Made)
+{
+    /// <summary>True when making the repetitions failed after the commit and is left to the catch-up.</summary>
+    public bool FollowUpsPending { get; init; }
+}

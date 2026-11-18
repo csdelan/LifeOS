@@ -128,6 +128,75 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         Assert.Equal(["paying the rank-ups the change reached"], log.Failed);
     }
 
+    [Fact]
+    public async Task A_repeating_task_whose_first_repetition_fails_is_made_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+
+        ports.Fail($"{nameof(ITaskSeriesRepository)}.{nameof(ITaskSeriesRepository.CreateAsync)}");
+        var made = await kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
+            SubjectTypes.Task, Unique("Take out the bins"), $$"""{"recurrence":{{EveryDay}}}""", cancellationToken: Ct);
+
+        Assert.True(made.FollowUpsPending);
+        Assert.Equal(SubjectTypes.Task, await TypeOfAsync(made.Subject.Id));
+        Assert.Equal(["making the new task's first repetition"], log.Failed);
+    }
+
+    [Fact]
+    public async Task A_recurrence_whose_repetitions_fail_is_set_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+        var task = await kernel.GetRequiredService<SubjectService>().CreateAsync(SubjectTypes.Task, Unique("Mop"), cancellationToken: Ct);
+
+        ports.Fail($"{nameof(ITaskSeriesRepository)}.{nameof(ITaskSeriesRepository.CreateAsync)}");
+        var result = await kernel.GetRequiredService<RecurrenceService>().SetAsync(task.Urn, EveryDay, start: null, Ct);
+
+        Assert.True(result.FollowUpsPending);
+        Assert.Empty(result.Made);
+        Assert.NotNull(await AttributeAsync(task.Id, "recurrence"));
+        Assert.Equal(["making the repeating task's repetitions"], log.Failed);
+    }
+
+    [Fact]
+    public async Task A_tag_whose_follow_to_the_repetitions_fails_is_added_and_answered_pending()
+    {
+        var (kernel, ports, log) = Build();
+        var series = await RepeatingAsync(kernel, "Dust");
+
+        ports.Fail($"{nameof(ITaskSeriesRepository)}.{nameof(ITaskSeriesRepository.FollowTagsAsync)}");
+        var result = await kernel.GetRequiredService<TagService>().ApplyAsync(series.Urn, ["chores"], [], Ct);
+
+        Assert.True(result.FollowUpsPending);
+        Assert.Equal(1, result.AddedCount);
+        Assert.Equal(["carrying the tags to the open repetitions"], log.Failed);
+    }
+
+    /// <summary>
+    /// The class (code review CR139): every call in Application to a repeating Task's follow-up runs
+    /// inside <see cref="AfterCommit"/>, whose work gets the token <c>ct</c>; one called with the
+    /// caller's token runs bare after the commit, and its failure would read as "Nothing was
+    /// written". The guards and the rename, which run before or inside the write, aren't follow-ups.
+    /// </summary>
+    [Fact]
+    public void Every_repeating_task_follow_up_in_Application_runs_after_the_commit_through_AfterCommit()
+    {
+        var call = new System.Text.RegularExpressions.Regex(
+            @"\b(taskSeries|triage)\.(AfterPatternAsync|FollowAsync|FollowTagsAsync|AfterStatusAsync|AfterRestoreAsync|FlagItemAsync)\((?<args>[^;]*)");
+        var source = Path.Combine(RepoRoot.Path, "src", "LifeOs.Application", "Subjects");
+        var calls = Directory.EnumerateFiles(source, "*Service.cs")
+            .Where(f => !f.EndsWith("TaskSeriesService.cs", StringComparison.Ordinal)
+                && !f.EndsWith("TriageService.cs", StringComparison.Ordinal))
+            .SelectMany(f => File.ReadLines(f).Select((line, i) => (File: Path.GetFileName(f), Line: i + 1, Text: line)))
+            .Select(l => (l.File, l.Line, Match: call.Match(l.Text)))
+            .Where(l => l.Match.Success)
+            .ToList();
+
+        Assert.NotEmpty(calls);
+        Assert.Empty(calls
+            .Where(l => !System.Text.RegularExpressions.Regex.IsMatch(l.Match.Groups["args"].Value, @"\bct\)"))
+            .Select(l => $"{l.File}:{l.Line}"));
+    }
+
     /// <summary>
     /// The class, not the cases above (code review CR129): every result in Application that answers
     /// what a write earned also says whether what ran after its commit is pending, so a write that
@@ -194,6 +263,14 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         await connection.OpenAsync(Ct);
         return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
             "SELECT kind FROM bsk.event WHERE payload->'meal'->>'id' = @id;", new { id = mealId.ToString() }, cancellationToken: Ct));
+    }
+
+    private async Task<string?> TypeOfAsync(Guid id)
+    {
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        await connection.OpenAsync(Ct);
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT type FROM bsk.subject WHERE id = @id;", new { id }, cancellationToken: Ct));
     }
 
     private async Task<string?> AttributeAsync(Guid id, string key)
