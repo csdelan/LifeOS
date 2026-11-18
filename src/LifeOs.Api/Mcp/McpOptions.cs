@@ -31,22 +31,32 @@ public sealed class McpOptions
     public IReadOnlySet<string> BlockedClients { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>
-    /// What agents may write (§5.1): <see cref="McpWrites.Off"/>, the default, or
-    /// <see cref="McpWrites.Capture"/>, which adds to the Inbox and journals and clears raw
-    /// captures from the Inbox. <c>full</c> isn't built yet.
+    /// The highest level any agent writes at (§5.1, decision 7): <see cref="McpWrites.Off"/>, the
+    /// default, <see cref="McpWrites.Capture"/> or <see cref="McpWrites.Full"/>. Each client's own
+    /// level, in <see cref="WriteClients"/>, is held to it.
     /// </summary>
     public string Writes { get; init; } = McpWrites.Off;
 
     /// <summary>
-    /// The clients that may write when writes are on. A client must also be on LifeOS's list and
-    /// act as an AI-agent Person (§5.1); every other client stays read-only.
+    /// The clients that may write when writes are on, each with the level it's named at
+    /// (<c>&lt;id&gt;:full</c>; a bare id is <c>capture</c>). A client must also be on LifeOS's list
+    /// and act as an AI-agent Person (§5.1); every other client stays read-only.
     /// </summary>
-    public IReadOnlySet<string> WriteClients { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+    public IReadOnlyDictionary<string, string> WriteClients { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
     public bool WritesOn => Writes != McpWrites.Off;
 
     /// <summary>Whether writes are on and <paramref name="clientId"/> is named in <c>Mcp:WriteClients</c>.</summary>
-    public bool NamesWriter(string clientId) => WritesOn && WriteClients.Contains(clientId.Trim());
+    public bool NamesWriter(string clientId) => WriteLevel(clientId) is not null;
+
+    /// <summary>
+    /// The level <paramref name="clientId"/> writes at, by the settings alone: the level it's named
+    /// at, held to <see cref="Writes"/>; null when writes are off or it isn't named.
+    /// </summary>
+    public string? WriteLevel(string clientId)
+        => WritesOn && WriteClients.TryGetValue(clientId.Trim(), out var named)
+            ? McpWrites.Lower(named, Writes)
+            : null;
 
     public bool Allows(string domain) => Domains.Contains(domain);
 
@@ -99,26 +109,48 @@ public sealed class McpOptions
             Domains = ParseDomains(configuration[DomainsKey]),
             BlockedClients = Split(configuration[BlockedClientsKey]).ToHashSet(StringComparer.Ordinal),
             Writes = ParseWrites(configuration[WritesKey]),
-            WriteClients = Split(configuration[WriteClientsKey]).ToHashSet(StringComparer.Ordinal),
+            WriteClients = ParseWriteClients(configuration[WriteClientsKey]),
         };
     }
 
     private static string ParseWrites(string? text)
     {
         var writes = text?.Trim();
-        if (string.IsNullOrEmpty(writes) || string.Equals(writes, McpWrites.Off, StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(writes))
         {
             return McpWrites.Off;
         }
 
-        if (string.Equals(writes, McpWrites.Capture, StringComparison.OrdinalIgnoreCase))
+        return McpWrites.Levels.FirstOrDefault(l => string.Equals(l, writes, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"{WritesKey} must be off, capture or full, got '{writes}'.");
+    }
+
+    /// <summary>
+    /// <c>Mcp:WriteClients</c>: client ids, each bare (<c>capture</c>) or with its level after a
+    /// colon. A client named twice, or at a level that isn't one, fails startup.
+    /// </summary>
+    private static Dictionary<string, string> ParseWriteClients(string? text)
+    {
+        var clients = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in Split(text))
         {
-            return McpWrites.Capture;
+            var colon = entry.LastIndexOf(':');
+            var clientId = (colon < 0 ? entry : entry[..colon]).Trim();
+            var named = colon < 0 ? McpWrites.Capture : entry[(colon + 1)..].Trim();
+            var level = McpWrites.Levels
+                .Where(l => l != McpWrites.Off)
+                .FirstOrDefault(l => string.Equals(l, named, StringComparison.OrdinalIgnoreCase))
+                ?? throw new InvalidOperationException(
+                    $"{WriteClientsKey} names {clientId} at '{named}'. A client writes at capture or full: <id>:full, or the id alone for capture.");
+            if (clientId.Length == 0 || !clients.TryAdd(clientId, level))
+            {
+                throw new InvalidOperationException(clientId.Length == 0
+                    ? $"{WriteClientsKey} has an entry with no client id: '{entry}'."
+                    : $"{WriteClientsKey} names {clientId} twice.");
+            }
         }
 
-        throw new InvalidOperationException(string.Equals(writes, "full", StringComparison.OrdinalIgnoreCase)
-            ? $"{WritesKey} is full, which isn't built yet (agent-access plan §5.2). Use off or capture."
-            : $"{WritesKey} must be off or capture, got '{writes}'.");
+        return clients;
     }
 
     private static HashSet<string> ParseDomains(string? text)
@@ -152,16 +184,45 @@ public sealed class McpOptions
         => (text ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
-/// <summary>The levels of <c>Mcp:Writes</c> (agent-access plan §5.1).</summary>
+/// <summary>
+/// The write levels (agent-access plan §5.1), lowest first: <c>Mcp:Writes</c>'s ceiling, and each
+/// client's own level in <c>Mcp:WriteClients</c>. A level includes every tool of the levels below it.
+/// </summary>
 public static class McpWrites
 {
     public const string Off = "off";
 
     /// <summary>
-    /// <c>capture</c>, <c>add_journal_entry</c> and <c>dismiss</c>: they add, and clear a raw
-    /// capture from the Inbox, and change nothing else (§5.2, notes plan N7).
+    /// <c>capture</c>, <c>add_journal_entry</c>, <c>dismiss</c> and <c>link_reflection</c>: they
+    /// add, clear a raw capture from the Inbox and link a review to its note, and change nothing
+    /// else (§5.2, notes plans N7 and N8).
     /// </summary>
     public const string Capture = "capture";
+
+    /// <summary>The <c>capture</c> tools, and the tools that change items (§5.2, §5.6).</summary>
+    public const string Full = "full";
+
+    /// <summary>Every level, lowest first.</summary>
+    public static readonly IReadOnlyList<string> Levels = [Off, Capture, Full];
+
+    /// <summary>Whether <paramref name="level"/> includes what <paramref name="needed"/> allows.</summary>
+    public static bool Reaches(string level, string needed) => Rank(level) >= Rank(needed);
+
+    /// <summary>The lower of two levels.</summary>
+    public static string Lower(string a, string b) => Rank(a) <= Rank(b) ? a : b;
+
+    private static int Rank(string level)
+    {
+        for (var i = 0; i < Levels.Count; i++)
+        {
+            if (Levels[i] == level)
+            {
+                return i;
+            }
+        }
+
+        throw new ArgumentException($"'{level}' isn't a write level.", nameof(level));
+    }
 }
 
 /// <summary>The optional areas' names, as <c>Mcp:Domains</c> spells them.</summary>

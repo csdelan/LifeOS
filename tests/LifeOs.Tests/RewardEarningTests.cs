@@ -112,7 +112,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
                 """,
                 new { id = award.EventId, task = task.Id }, cancellationToken: Ct));
         Assert.Equal(Provenances.Derived, row.Provenance);
-        Assert.Equal(new[] { completed.EventId }, row.DerivedFrom);
+        Assert.Equal(new[] { completed.EventId!.Value }, row.DerivedFrom);
         Assert.Equal(1, row.Edges);
     }
 
@@ -196,7 +196,7 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
             var derivedFrom = await connection.ExecuteScalarAsync<Guid[]>(new CommandDefinition(
                 "SELECT derived_from FROM bsk.event WHERE id = @id;", new { id = reversal.EventId },
                 cancellationToken: Ct));
-            Assert.Equal(new[] { reopened.EventId }, derivedFrom);
+            Assert.Equal(new[] { reopened.EventId!.Value }, derivedFrom);
         }
 
         var again = await kernel.Status.ChangeStatusAsync(task.Urn, "Completed", Ct);
@@ -215,6 +215,8 @@ public sealed class RewardEarningTests(PostgresFixture postgres, ClassDatabase c
         var repeated = await kernel.Status.ChangeStatusAsync(task.Urn, "completed", Ct);
 
         Assert.Empty(repeated.Awards);
+        Assert.True(repeated.Unchanged);
+        Assert.Null(repeated.EventId);
         Assert.Equal(Default(SubjectTypes.Task), await NetForAsync(kernel, task));
     }
 

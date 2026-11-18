@@ -153,6 +153,44 @@ public sealed class StatusServiceTests(ClassDatabase classDb) : IClassFixture<Cl
         Assert.Equal("In progress", stored);
     }
 
+    // Agent-access plan §5.4: set_status takes no request id, because saying a status again is
+    // answered here, by writing nothing.
+    [Fact]
+    public async Task Setting_the_status_an_item_already_has_writes_nothing()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var status = provider.GetRequiredService<StatusService>();
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"again {Guid.NewGuid():N}", cancellationToken: Ct);
+        var first = await status.ChangeStatusAsync(task.Urn, "In progress", Ct);
+
+        var again = await status.ChangeStatusAsync(task.Urn, " in progress", Ct);
+
+        Assert.False(first.Unchanged);
+        Assert.NotNull(first.EventId);
+        Assert.True(again.Unchanged);
+        Assert.Null(again.EventId);
+        Assert.Equal("In progress", again.Status);
+        Assert.Empty(again.Awards);
+        Assert.Empty(again.Progress);
+        Assert.Equal(1, await StateChangesForAsync(task.Id));
+    }
+
+    [Fact]
+    public async Task An_item_with_no_status_yet_records_its_first_status_even_where_it_reads_so_already()
+    {
+        var provider = Provider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var status = provider.GetRequiredService<StatusService>();
+        var task = await subjects.CreateAsync(SubjectTypes.Task, $"unset {Guid.NewGuid():N}", cancellationToken: Ct);
+
+        var set = await status.ChangeStatusAsync(task.Urn, "Not started", Ct);
+
+        Assert.False(set.Unchanged);
+        Assert.NotNull(set.EventId);
+        Assert.Equal(1, await StateChangesForAsync(task.Id));
+    }
+
     private async Task<long> StateChangesForAsync(Guid subjectId)
     {
         await using var connection = new NpgsqlConnection(classDb.ConnectionString);

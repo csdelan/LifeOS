@@ -20,3 +20,17 @@ public sealed class RequestReusedException(string message) : KernelRefusalExcept
         }
     }
 }
+
+/// <summary>
+/// A write its source already made under this request id, found as it was written: a retry that
+/// raced its first call. Nothing was written. The service that made the write catches it and
+/// answers the first write, so it reaches a door only from a store used without one. A conflict,
+/// so the API answers 409.
+/// </summary>
+public sealed class RequestAlreadyWrittenException(string sourceId, string externalId)
+    : KernelRefusalException(RefusalKind.Conflict, $"request_id '{externalId}' was already written; read it again.")
+{
+    public string SourceId { get; } = sourceId;
+
+    public string ExternalId { get; } = externalId;
+}

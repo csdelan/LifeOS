@@ -51,7 +51,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
 
         var tools = await client.ListToolsAsync(cancellationToken: Ct);
-        Assert.Contains($"MCP write tools listed for {Writer}", log.Messages("LifeOs.Api.Mcp"));
+        Assert.Contains($"MCP write tools listed for {Writer} at capture", log.Messages("LifeOs.Api.Mcp"));
 
         var writing = tools.Where(t => t.ProtocolTool.Annotations?.ReadOnlyHint != true).Select(t => t.Name).Order();
         Assert.Equal(McpWriteAccess.Tools.Order(), writing);
@@ -113,9 +113,11 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.True(writer.MayWrite);
         Assert.True(writer.ActsAsAgentPerson);
         Assert.Null(writer.ReadOnlyBecause);
+        Assert.Equal(McpWrites.Capture, writer.WriteLevel);
         var other = Assert.Single(read.Agents, a => a.ClientId == Other);
         Assert.False(other.MayWrite);
         Assert.Equal("Mcp:WriteClients doesn't name it", other.ReadOnlyBecause);
+        Assert.Null(other.WriteLevel);
         // /mcp lists the write tools to exactly the agents the page says may write.
         foreach (var agent in new[] { writer, other })
         {
@@ -128,6 +130,60 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         var unlinked = Assert.Single((await AgentsAsync(host)).Agents, a => a.ClientId == Writer);
         Assert.False(unlinked.MayWrite);
         Assert.Equal("it acts as no AI-agent Person in use (Connected agents)", unlinked.ReadOnlyBecause);
+    }
+
+    // Agent-access plan §2 decision 7: the chats Chris watches write at full, the nightly sweep at
+    // capture, named so in Mcp:WriteClients.
+    [Fact]
+    public async Task Each_agent_is_listed_and_may_call_the_write_tools_of_its_own_level()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var log = new LogCapture();
+        var settings = Settings(McpWrites.Full);
+        settings[McpOptions.WriteClientsKey] = $"{Writer}:full, {Other}";
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, settings, log.AddTo);
+        await ActAsAiPersonAsync(host, Writer);
+        await ActAsAiPersonAsync(host, Other);
+
+        var read = await AgentsAsync(host);
+        Assert.Equal(McpWrites.Full, read.Writes);
+        Assert.Equal(McpWrites.Full, Assert.Single(read.Agents, a => a.ClientId == Writer).WriteLevel);
+        Assert.Equal(McpWrites.Capture, Assert.Single(read.Agents, a => a.ClientId == Other).WriteLevel);
+
+        foreach (var (clientId, level) in new[] { (Writer, McpWrites.Full), (Other, McpWrites.Capture) })
+        {
+            await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: clientId));
+            Assert.Equal(McpWriteAccess.ToolsAt(level).Order(), (await NamesAsync(client)).Intersect(McpWriteAccess.Tools).Order());
+            Assert.Contains($"MCP write tools listed for {clientId} at {level}", log.Messages("LifeOs.Api.Mcp"));
+
+            // A write tool above its level is refused before it runs, in words that say why.
+            foreach (var tool in McpWriteAccess.Tools.Except(McpWriteAccess.ToolsAt(level)))
+            {
+                var call = await client.CallToolAsync(tool, new Dictionary<string, object?>(), cancellationToken: Ct);
+                Assert.True(call.IsError, $"{clientId} could call {tool}");
+                Assert.Contains($"at the {level} level", Text(call), StringComparison.Ordinal);
+            }
+
+            // Every capture tool works for both.
+            await CallAsync(client, "capture", new() { ["text"] = $"From {clientId}" });
+        }
+    }
+
+    [Fact]
+    public async Task An_agent_named_at_full_writes_at_capture_while_mcp_writes_is_capture()
+    {
+        await using var db = await DomainTestDatabase.CreateAsync(postgres, Ct);
+        var settings = Settings(McpWrites.Capture);
+        settings[McpOptions.WriteClientsKey] = $"{Writer}:full";
+        await using var host = await ApiTestHost.StartAsync(db.ConnectionString, Ct, settings);
+        await ActAsAiPersonAsync(host, Writer);
+
+        var writer = Assert.Single((await AgentsAsync(host)).Agents, a => a.ClientId == Writer);
+
+        Assert.True(writer.MayWrite);
+        Assert.Equal(McpWrites.Capture, writer.WriteLevel);
+        await using var client = await McpServerTests.ConnectAsync(host, ApiTestHost.TokenFor(clientId: Writer));
+        Assert.Equal(McpWriteAccess.ToolsAt(McpWrites.Capture).Order(), (await NamesAsync(client)).Intersect(McpWriteAccess.Tools).Order());
     }
 
     [Fact]
@@ -143,6 +199,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         var writer = Assert.Single(read.Agents, a => a.ClientId == Writer);
         Assert.False(writer.MayWrite);
         Assert.Equal("Mcp:Writes is off", writer.ReadOnlyBecause);
+        Assert.Null(writer.WriteLevel);
     }
 
     [Fact]

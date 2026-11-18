@@ -36,7 +36,7 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
 
         Assert.True(result.FollowUpsPending);
         Assert.Empty(result.Awards);
-        Assert.Equal("state_change", await KindOfAsync(result.EventId));
+        Assert.Equal("state_change", await KindOfAsync(result.EventId!.Value));
         Assert.Equal(["the reward reconcile"], log.Failed);
     }
 

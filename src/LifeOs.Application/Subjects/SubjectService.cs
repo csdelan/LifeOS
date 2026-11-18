@@ -90,11 +90,14 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// <summary>
     /// Creates a new subject of the given type with a freshly minted URN and the
     /// supplied attributes. Always creates — for reuse-by-title types the store's
-    /// uniqueness guarantee surfaces a <see cref="DuplicateSubjectException"/>.
+    /// uniqueness guarantee surfaces a <see cref="DuplicateSubjectException"/>. With
+    /// <paramref name="externalId"/> (a request id), it's born at its type's first status, which
+    /// carries the id, and a create its source already made under that id is refused with
+    /// <see cref="RequestAlreadyWrittenException"/>, nothing written.
     /// </summary>
     public async Task<SubjectRef> CreateAsync(
         string type, string title, string attributesJson = "{}", Guid? originEventId = null,
-        CancellationToken cancellationToken = default)
+        string? externalId = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -104,7 +107,7 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var id = await subjects.CreateAsync(
-            Insertable(urn, type, cleanTitle, attributesJson, originEventId), cancellationToken);
+            Insertable(urn, type, cleanTitle, attributesJson, originEventId, externalId: externalId), cancellationToken);
         return new SubjectRef(id, urn, type, cleanTitle);
     }
 
@@ -114,11 +117,12 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// creation (GEN-7). Relation validity and the parent are the caller's to settle
     /// (see <see cref="ChildCreationService"/>); this just builds the child and hands
     /// the pair to the store so it is all-or-nothing. It's the only way a Habit is made: a
-    /// Habit is born serving a Goal or an Identity Statement (code review CR125).
+    /// Habit is born serving a Goal or an Identity Statement (code review CR125). A request id
+    /// (<paramref name="externalId"/>) is as <see cref="CreateAsync"/> takes it.
     /// </summary>
     public async Task<(SubjectRef Child, Guid EdgeId)> CreateWithParentEdgeAsync(
         string type, string title, string attributesJson, string relation, SubjectRef parent,
-        CancellationToken cancellationToken = default)
+        string? externalId = null, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -128,7 +132,9 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
         var cleanTitle = NormalizeTitle(title);
         var urn = Urns.Build(type, cleanTitle);
         var (childId, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            Insertable(urn, type, cleanTitle, attributesJson, servesParent: SubjectGates.IsHabitParent(relation, parent.Type)),
+            Insertable(
+                urn, type, cleanTitle, attributesJson, servesParent: SubjectGates.IsHabitParent(relation, parent.Type),
+                externalId: externalId),
             relation, parent.Id, Provenances.Declared, cancellationToken);
         return (new SubjectRef(childId, urn, type, cleanTitle), edgeId);
     }
@@ -262,11 +268,13 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
     /// pattern is a repeating Task (D16), so one it can't repeat on is refused here, before
     /// anything is written, whichever door made it; so is a Value without its statement (code
     /// review CR72), promotion's included, and a Habit made without a Goal or Identity Statement
-    /// it serves (<paramref name="servesParent"/>, code review CR125).
+    /// it serves (<paramref name="servesParent"/>, code review CR125). With a request id
+    /// (<paramref name="externalId"/>), every type is born with a status, its first, which carries
+    /// the id; a type with no status can't carry one.
     /// </summary>
     private NewSubject Insertable(
         string urn, string type, string title, string attributesJson, Guid? originEventId = null,
-        bool servesParent = false)
+        bool servesParent = false, string? externalId = null)
     {
         if (type == SubjectTypes.Habit && SubjectGates.HabitRefusal(null, servesParent ? 1 : 0) is { } refusal)
         {
@@ -283,6 +291,16 @@ public sealed class SubjectService(ISubjectRepository subjects, IClock clock, Ev
             && !ValueStatements.Has(System.Text.Json.Nodes.JsonNode.Parse(attributes) as System.Text.Json.Nodes.JsonObject ?? []))
         {
             throw new ArgumentException(ValueStatements.Missing);
+        }
+
+        if (externalId is not null)
+        {
+            var first = StatusVocabulary.InitialStatusFor(type) ?? StatusVocabulary.For(type).FirstOrDefault()
+                ?? throw new ArgumentException($"{type} has no status, so making one can't carry a request id.");
+            return new(urn, type, title, attributes, originEventId)
+            {
+                Status = new InitialStatus(first, clock.UtcNow, eventSource.Id, externalId),
+            };
         }
 
         return new(urn, type, title, attributes, originEventId)

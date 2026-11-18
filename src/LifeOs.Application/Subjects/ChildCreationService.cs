@@ -15,7 +15,7 @@ public sealed class ChildCreationService(SubjectService subjects)
     public async Task<ChildCreationResult> CreateChildAsync(
         string childType, string title, string parentReference,
         string? relationOverride = null, string attributesJson = "{}",
-        CancellationToken cancellationToken = default)
+        string? externalId = null, CancellationToken cancellationToken = default)
     {
         var parent = await subjects.ResolveAsync(parentReference, cancellationToken);
 
@@ -44,7 +44,7 @@ public sealed class ChildCreationService(SubjectService subjects)
         }
 
         var (child, edgeId) = await subjects.CreateWithParentEdgeAsync(
-            childType, title, attributesJson, relation, parent, cancellationToken);
+            childType, title, attributesJson, relation, parent, externalId, cancellationToken);
 
         return new ChildCreationResult(child, relation, parent, edgeId);
     }

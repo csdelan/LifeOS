@@ -86,7 +86,7 @@ public static class WriteEndpoints
 
         var parent = string.IsNullOrWhiteSpace(body.Parent) ? null : body.Parent;
         var made = await creation.CreateAsync(
-            canonicalType, body.Title, attributes.ToJsonString(), parent, body.Relation, cancellationToken);
+            canonicalType, body.Title, attributes.ToJsonString(), parent, body.Relation, cancellationToken: cancellationToken);
         return Results.Ok(ToCreated(made.Subject));
     }
 

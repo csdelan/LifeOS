@@ -7120,6 +7120,12 @@
               "string"
             ]
           },
+          "writeLevel": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
           "lastCallAt": {
             "type": [
               "null",

@@ -48,13 +48,15 @@ internal static class StatusCommand
                     {
                         eventId = result.EventId,
                         subject = new { result.Subject.Urn, result.Subject.Type },
-                        status = result.Status
+                        status = result.Status,
+                        unchanged = result.Unchanged
                     });
                 }
                 else
                 {
-                    Console.WriteLine(
-                        $"Recorded status '{result.Status}' for {result.Subject.Urn} (state_change {result.EventId}).");
+                    Console.WriteLine(result.Unchanged
+                        ? $"{result.Subject.Urn} is already '{result.Status}'; nothing recorded."
+                        : $"Recorded status '{result.Status}' for {result.Subject.Urn} (state_change {result.EventId}).");
                     RewardOutput.WriteAwards(result.Awards);
                     RewardOutput.WriteProgress(result.Progress);
                     RewardOutput.WritePending(result.FollowUpsPending);

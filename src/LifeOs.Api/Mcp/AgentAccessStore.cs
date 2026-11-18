@@ -446,6 +446,13 @@ public sealed class AgentClient
     /// <summary>Why it can only read, in the server log's words; null when it may write.</summary>
     public string? ReadOnlyBecause { get; set; }
 
+    /// <summary>
+    /// The level it writes at, <c>capture</c> or <c>full</c> (§5.1, decision 7): the level
+    /// <c>Mcp:WriteClients</c> names it at, held to <c>Mcp:Writes</c>. Null when it can't write.
+    /// Filled by <c>GET /api/agents</c>.
+    /// </summary>
+    public string? WriteLevel { get; set; }
+
     public DateTime? LastCallAt { get; set; }
     public int CallsThisWeek { get; set; }
     public DateTime? LastRefusedAt { get; set; }

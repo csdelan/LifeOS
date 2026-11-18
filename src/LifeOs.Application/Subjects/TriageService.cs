@@ -39,7 +39,12 @@ public sealed class TriageService(
             {
                 // item.Label is the subject's urn; ChangeStatusAsync re-resolves it.
                 var statusResult = await status.ChangeStatusAsync(item.Label, dismiss, cancellationToken);
-                return new TriageResult(statusResult.EventId, item, dismiss, StatusChanged: true);
+                if (statusResult.EventId is { } changed)
+                {
+                    return new TriageResult(changed, item, dismiss, StatusChanged: true);
+                }
+
+                // Already at that status, so nothing moved: it leaves the Inbox by the marker below.
             }
         }
 

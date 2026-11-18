@@ -58,8 +58,9 @@ public static class McpHost
             .WithResources<McpGuide>()
             .WithRequestFilters(filters => filters.AddListToolsFilter(next => async (context, cancellationToken) =>
             {
-                // The write tools are listed only to an agent that may write (§5.1). Either way it's
-                // logged, with the reason when they're hidden, since an agent can't say why it lacks them.
+                // The write tools are listed only to an agent that may write, and only those of its
+                // level (§5.1). Either way it's logged, with the reason when they're hidden, since an
+                // agent can't say why it lacks them.
                 var result = await next(context, cancellationToken);
                 if (!options.WritesOn)
                 {
@@ -71,14 +72,15 @@ public static class McpHost
                     : new McpWriteCheck(null, "the write tools aren't registered");
                 var client = context.User is { } user ? AgentClaims.ClientId(user) : null;
                 var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("LifeOs.Api.Mcp");
+                var listed = check.Agent is { } agent ? McpWriteAccess.ToolsAt(agent.Level) : new HashSet<string>();
+                result.Tools = result.Tools.Where(t => !McpWriteAccess.Tools.Contains(t.Name) || listed.Contains(t.Name)).ToList();
                 if (check.Agent is null)
                 {
-                    result.Tools = result.Tools.Where(t => !McpWriteAccess.Tools.Contains(t.Name)).ToList();
                     logger?.LogInformation("MCP write tools hidden from {ClientId}: {Why}", client, check.Why);
                 }
                 else
                 {
-                    logger?.LogInformation("MCP write tools listed for {ClientId}", client);
+                    logger?.LogInformation("MCP write tools listed for {ClientId} at {Level}", client, check.Agent.Level);
                 }
 
                 return result;
@@ -93,14 +95,25 @@ public static class McpHost
                 int? items = null;
                 try
                 {
-                    // A write tool runs only for an agent that may write (§5.1), checked here for
-                    // every one of them, so a new write tool can't forget to (code review CR29).
-                    if (McpWriteAccess.Tools.Contains(tool)
-                        && (context.Services?.GetService<McpWriteAccess>() is not { } writers
-                            || (await writers.CheckAsync(context.User, cancellationToken)).Agent is null))
+                    // A write tool runs only for an agent that may write, at the tool's level or above
+                    // (§5.1), checked here for every one of them, so a new write tool can't forget to
+                    // (code review CR29).
+                    if (McpWriteAccess.Tools.Contains(tool))
                     {
-                        logger?.LogInformation("MCP {Tool} for {ClientId}: refused, it may not write", tool, client);
-                        return McpResults.Error(McpWriteAccess.Refusal);
+                        var writer = context.Services?.GetService<McpWriteAccess>() is { } writers
+                            ? (await writers.CheckAsync(context.User, cancellationToken)).Agent
+                            : null;
+                        if (writer is null)
+                        {
+                            logger?.LogInformation("MCP {Tool} for {ClientId}: refused, it may not write", tool, client);
+                            return McpResults.Error(McpWriteAccess.Refusal);
+                        }
+
+                        if (!McpWriteAccess.Allows(writer, tool))
+                        {
+                            logger?.LogInformation("MCP {Tool} for {ClientId}: refused, it writes at {Level}", tool, client, writer.Level);
+                            return McpResults.Error(McpWriteAccess.LevelRefusal(writer, tool));
+                        }
                     }
 
                     var result = await next(context, cancellationToken);

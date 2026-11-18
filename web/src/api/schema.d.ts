@@ -2391,6 +2391,7 @@ export interface components {
             actsAsAgentPerson: boolean;
             mayWrite: boolean;
             readOnlyBecause?: null | string;
+            writeLevel?: null | string;
             /** Format: date-time */
             lastCallAt?: null | string;
             /** Format: int32 */

@@ -16,27 +16,56 @@ using ModelContextProtocol;
 
 namespace LifeOs.Api.Mcp;
 
-/// <summary>An agent allowed to write, as one call sees it: its client and the AI-agent Person it acts as.</summary>
-public sealed record McpAgent(string ClientId, Guid PersonId, string PersonName)
+/// <summary>
+/// An agent allowed to write, as one call sees it: its client, the AI-agent Person it acts as, and
+/// the level it writes at (§5.1, decision 7).
+/// </summary>
+public sealed record McpAgent(string ClientId, Guid PersonId, string PersonName, string Level)
 {
     /// <summary>The source its events carry: <c>mcp:&lt;client_id&gt;</c> (agent-access plan §5.3).</summary>
     public string SourceId => KernelSources.Agent(ClientId);
 }
 
 /// <summary>
-/// Who may write through <c>/mcp</c> (agent-access plan §5.1): writes are on, the client is
-/// named in <c>Mcp:WriteClients</c>, it's on LifeOS's list, and it acts as an AI-agent Person in
-/// use. Anyone else doesn't see the write tools, and a call to one is refused.
+/// Who may write through <c>/mcp</c>, and with which tools (agent-access plan §5.1): writes are
+/// on, the client is named in <c>Mcp:WriteClients</c>, it's on LifeOS's list, and it acts as an
+/// AI-agent Person in use. It's listed, and may call, the write tools of its level and the levels
+/// below. Anyone else doesn't see the write tools, and a call to one is refused.
 /// </summary>
 public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http, AgentAccessStore? access)
 {
-    /// <summary>The write tools at the <c>capture</c> level (§5.2, notes plans N7 and N8).</summary>
-    public static readonly IReadOnlySet<string> Tools =
-        new HashSet<string>(StringComparer.Ordinal) { "capture", "add_journal_entry", "dismiss", "link_reflection" };
+    /// <summary>
+    /// Every write tool and the lowest level that lists it (§5.2): the server's call filter refuses
+    /// a tool here to an agent below its level, so a new write tool can't forget to check.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, string> ToolLevels = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        // Notes plans N7 and N8.
+        ["capture"] = McpWrites.Capture,
+        ["add_journal_entry"] = McpWrites.Capture,
+        ["dismiss"] = McpWrites.Capture,
+        ["link_reflection"] = McpWrites.Capture,
+    };
+
+    /// <summary>Every write tool, at any level.</summary>
+    public static readonly IReadOnlySet<string> Tools = ToolLevels.Keys.ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>The write tools an agent at <paramref name="level"/> is listed and may call.</summary>
+    public static IReadOnlySet<string> ToolsAt(string level)
+        => ToolLevels.Where(t => McpWrites.Reaches(level, t.Value)).Select(t => t.Key).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>Whether <paramref name="agent"/>'s level reaches <paramref name="tool"/>'s; a tool that doesn't write always does.</summary>
+    public static bool Allows(McpAgent agent, string tool)
+        => !ToolLevels.TryGetValue(tool, out var needed) || McpWrites.Reaches(agent.Level, needed);
 
     public const string Refusal =
         "This agent can't write to LifeOS. Chris allows an agent to write in LifeOS's settings: it's named in "
         + "Mcp:WriteClients and acts as an AI-agent Person on the Connected agents page.";
+
+    /// <summary>Why <paramref name="agent"/> can't call <paramref name="tool"/>, a tool above its level.</summary>
+    public static string LevelRefusal(McpAgent agent, string tool)
+        => $"This agent writes to LifeOS at the {agent.Level} level, and {tool} needs {ToolLevels[tool]}. "
+            + "Chris sets each agent's level in Mcp:WriteClients.";
 
     /// <summary>The agent <paramref name="user"/> signed in as, when it may write; null otherwise.</summary>
     public async Task<McpAgent?> WriterAsync(ClaimsPrincipal? user, CancellationToken cancellationToken)
@@ -67,7 +96,7 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
         var person = await access.WriterAsync(clientId, cancellationToken);
         return person is null
             ? new McpWriteCheck(null, NoPerson)
-            : new McpWriteCheck(new McpAgent(clientId, person.Id, person.Name), null);
+            : new McpWriteCheck(new McpAgent(clientId, person.Id, person.Name, options.WriteLevel(clientId)!), null);
     }
 
     /// <summary>
@@ -78,6 +107,10 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
     public static string? ReadOnlyBecause(McpOptions options, AgentClient agent)
         => !agent.Allowed ? "LifeOS doesn't allow it"
             : SettingsRefuse(options, agent.ClientId) ?? (agent.ActsAsAgentPerson ? null : NoPerson);
+
+    /// <summary>The level <paramref name="agent"/> writes at, as the Connected agents page shows it; null when it can't write.</summary>
+    public static string? LevelOf(McpOptions options, AgentClient agent)
+        => ReadOnlyBecause(options, agent) is null ? options.WriteLevel(agent.ClientId) : null;
 
     private const string NoPerson = "it acts as no AI-agent Person in use (Connected agents)";
 

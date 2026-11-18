@@ -118,9 +118,9 @@ public sealed class PlannedHabitTests(ClassDatabase classDb) : IClassFixture<Cla
 
         // A Habit is made serving a Goal or an Identity Statement (code review CR125).
         var made = (await kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
-            SubjectTypes.Habit, Unique("made habit"), "{}", goal.Urn, SubjectRelations.Serves, Ct)).Subject;
+            SubjectTypes.Habit, Unique("made habit"), "{}", goal.Urn, SubjectRelations.Serves, cancellationToken: Ct)).Subject;
         var (child, _) = await subjects.CreateWithParentEdgeAsync(
-            SubjectTypes.Habit, Unique("child habit"), "{}", SubjectRelations.Serves, goal, Ct);
+            SubjectTypes.Habit, Unique("child habit"), "{}", SubjectRelations.Serves, goal, cancellationToken: Ct);
         var task = await subjects.CreateAsync(SubjectTypes.Task, Unique("plain task"), cancellationToken: Ct);
 
         Assert.Equal("Planned", await StatusAsync(made.Id));

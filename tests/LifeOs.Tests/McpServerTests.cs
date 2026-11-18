@@ -192,12 +192,40 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
         Assert.False(capture.NamesWriter("someone"));
     }
 
+    // Agent-access plan §2 decision 7: each client is named at its level, a bare id at capture,
+    // and Mcp:Writes is the ceiling.
+    [Fact]
+    public void Each_client_writes_at_the_level_it_is_named_at_held_to_the_ceiling()
+    {
+        var clients = (McpOptions.WriteClientsKey, " chat : FULL , sweep, notes:capture ");
+        var full = McpOptions.From(Config((McpOptions.WritesKey, "full"), clients));
+        var capped = McpOptions.From(Config((McpOptions.WritesKey, "capture"), clients));
+        var off = McpOptions.From(Config(clients));
+
+        Assert.Equal(McpWrites.Full, full.Writes);
+        Assert.Equal(McpWrites.Full, full.WriteLevel("chat"));
+        Assert.Equal(McpWrites.Capture, full.WriteLevel("sweep"));
+        Assert.Equal(McpWrites.Capture, full.WriteLevel("notes"));
+        Assert.Null(full.WriteLevel("someone"));
+        Assert.Equal(McpWrites.Capture, capped.WriteLevel("chat"));
+        Assert.Null(off.WriteLevel("chat"));
+
+        Assert.True(McpWrites.Reaches(McpWrites.Full, McpWrites.Capture));
+        Assert.False(McpWrites.Reaches(McpWrites.Capture, McpWrites.Full));
+        // Every write tool is at a level an agent can be named at.
+        Assert.All(McpWriteAccess.ToolLevels.Values, level => Assert.Contains(level, new[] { McpWrites.Capture, McpWrites.Full }));
+        Assert.Equal(McpWriteAccess.Tools.Order(), McpWriteAccess.ToolsAt(McpWrites.Full).Order());
+        Assert.Empty(McpWriteAccess.ToolsAt(McpWrites.Off));
+    }
+
     [Theory]
     [InlineData(McpOptions.EnabledKey, "yes")]
     [InlineData(McpOptions.DomainsKey, "health,finance")]
-    // full (agent-access plan §5.2) isn't built yet.
-    [InlineData(McpOptions.WritesKey, "full")]
     [InlineData(McpOptions.WritesKey, "everything")]
+    [InlineData(McpOptions.WriteClientsKey, "chat:everything")]
+    [InlineData(McpOptions.WriteClientsKey, "chat:off")]
+    [InlineData(McpOptions.WriteClientsKey, "chat,chat:full")]
+    [InlineData(McpOptions.WriteClientsKey, ":full")]
     public void A_bad_setting_fails_startup(string key, string value)
         => Assert.Throws<InvalidOperationException>(() => McpOptions.From(Config((key, value))));
 

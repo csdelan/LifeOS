@@ -52,7 +52,10 @@ public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReade
                 rows[0].ArtifactId,
                 rows.Where(r => r.SubjectId is not null)
                     .Select(r => new SubjectRef(r.SubjectId!.Value, r.Urn!, r.Type!, r.Title!))
-                    .ToList());
+                    .ToList())
+            {
+                PayloadSubjectId = Guid.TryParse(rows[0].PayloadSubject, out var named) ? named : null,
+            };
     }
 
     public async Task<IReadOnlyList<SubjectRef>> ConcernsAsync(Guid eventId, CancellationToken cancellationToken = default)
@@ -72,7 +75,8 @@ public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReade
 
     /// <summary>The read behind <see cref="FindWriteAsync"/>; <c>EventIndexTests</c> checks it uses <c>event_source_external_key</c>.</summary>
     public const string FindWriteSql = """
-        SELECT e.id, e.kind, e.artifact_id AS artifactid, s.id AS subjectid, s.urn, s.type, s.title
+        SELECT e.id, e.kind, e.artifact_id AS artifactid, e.payload->>'subject_id' AS payloadsubject,
+               s.id AS subjectid, s.urn, s.type, s.title
         FROM bsk.event e
         LEFT JOIN bsk.subject_event se ON se.event_id = e.id AND se.relation = 'concerns'
         LEFT JOIN bsk.subject s ON s.id = se.subject_id
@@ -85,6 +89,7 @@ public sealed class NpgsqlEventReader(NpgsqlDataSource dataSource) : IEventReade
         public Guid Id { get; set; }
         public string Kind { get; set; } = "";
         public Guid? ArtifactId { get; set; }
+        public string? PayloadSubject { get; set; }
         public Guid? SubjectId { get; set; }
         public string? Urn { get; set; }
         public string? Type { get; set; }

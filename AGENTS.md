@@ -26,9 +26,11 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `src/LifeOs.Api`: the ASP.NET Core API. It catches up repeating Tasks and the rewards as it
   starts (`StartupCatchUp`), so starting it against a database writes to it; `CatchUp:OnStart`
   false turns that off, and `ApiTestHost` does. It serves the SPA in production and `/mcp`, the
-  connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture`: then the clients
-  named in `Mcp:WriteClients` can capture to the Inbox, journal, dismiss raw captures and link a
-  review to its vault reflection, as `mcp:<client_id>` (`docs/pilot/agent-access-plan.md` §5).
+  connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture` or `full`: then the
+  clients named in `Mcp:WriteClients`, each at its own level (`<id>:full`, or the id alone for
+  capture) up to that ceiling, can capture to the Inbox, journal, dismiss raw captures and link a
+  review to its vault reflection, as `mcp:<client_id>`. A write tool goes in
+  `McpWriteAccess.ToolLevels` at the level it needs (`docs/pilot/agent-access-plan.md` §5).
   A feature whose events carry a new payload key, or that owns an attribute key on items of any
   type (as rewards owns `bounty`), adds it to `McpAreas`: an event no area claims
   is hidden from agents while any area is switched off.

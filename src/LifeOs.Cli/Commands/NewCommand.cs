@@ -138,7 +138,7 @@ internal static class NewCommand
                 // Under a parent with its edge (GEN-7); a Problem of the same title reused (D4);
                 // a Problem or Idea flagged for the Inbox; a repeating Task's first repetition (D16).
                 var made = await provider.GetRequiredService<SubjectCreationService>().CreateAsync(
-                    canonicalType, title, attributes.ToJsonString(), parent, relation, cancellationToken);
+                    canonicalType, title, attributes.ToJsonString(), parent, relation, cancellationToken: cancellationToken);
                 var created = made.Subject;
                 var childLink = made.Link;
                 var reused = made.Reused;

@@ -71,4 +71,11 @@ public interface IEventReader
 }
 
 /// <summary>An event a source already wrote for a request: its id, kind, text and the items it concerns.</summary>
-public sealed record EarlierWrite(Guid EventId, string Kind, Guid? ArtifactId, IReadOnlyList<SubjectRef> Concerns);
+public sealed record EarlierWrite(Guid EventId, string Kind, Guid? ArtifactId, IReadOnlyList<SubjectRef> Concerns)
+{
+    /// <summary>
+    /// The subject its payload names (<c>subject_id</c>), when it names one: the item a create that
+    /// carried a request id made, whose first status change carries the id.
+    /// </summary>
+    public Guid? PayloadSubjectId { get; init; }
+}

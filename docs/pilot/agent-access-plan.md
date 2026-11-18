@@ -118,6 +118,19 @@ change later without redoing the design.
 5. **A write needs two things: the switch, and the agent on a list.** `Mcp__Writes` turns
    writes on, and `Mcp__WriteClients` names the agents that may use them. Every other
    agent stays read-only.
+6. **An agent's status change pays as Chris's does** (decided 2026-11-18, for the `full`
+   level). Completing a Task through an agent pays its bounty, as Completed does from the web:
+   it's Chris's word through the agent (decision 4), moving it off Completed takes the pay back,
+   and the access log and "via Claude" show who set it. Weighed and not chosen: agents move items
+   through working statuses and cancel, but the statuses that pay (Completed, Fulfilled,
+   Resolved) stay Chris's. Phase 3's assistant, which works alone, gets a narrower rule of its
+   own (§6.3).
+7. **Each agent has its own write level** (decided 2026-11-18). `Mcp__WriteClients` names each
+   client with its level, `<id>:full` or `<id>:capture`; a bare id is `capture`, and
+   `Mcp__Writes` is the ceiling no client goes above. The nightly vault sweep runs with nobody
+   watching and reads dictated text, so it gets a connection of its own at `capture`, while the
+   chats Chris watches get `full`. Weighed and not chosen: one level for every agent, with only
+   the sweep's prompt holding it back.
 
 ## 3. Phase 0: backups
 
@@ -427,8 +440,8 @@ only the allow list and the access log touch the owner connection, and they writ
 | `Mcp__Enabled` | `false` | Off: `/mcp` and its metadata return 404. This is the kill switch |
 | `Mcp__Domains` | `health,food,rewards,home` | The optional areas exposed besides the core (§4.3) |
 | `Mcp__BlockedClients` | empty | Client ids refused immediately, even with a token that hasn't expired |
-| `Mcp__Writes` | `off` | `off` or `capture` (Phase 2, §5.1). `full` isn't built yet and fails startup |
-| `Mcp__WriteClients` | empty | The client ids that may write when writes are on, comma-separated (§5.1) |
+| `Mcp__Writes` | `off` | `off`, `capture` or `full` (Phase 2, §5.1): the highest level any agent writes at |
+| `Mcp__WriteClients` | empty | The client ids that may write when writes are on, comma-separated, each at its own level: `<id>:full`, or the id alone for `capture` (§5.1) |
 
 - An unknown value fails startup, like the other settings.
 - To change one: `fly secrets set <key>=<value> -a <app>`. The machine restarts with the
@@ -956,21 +969,37 @@ Claude Code on PICARD signs in as too, and claude.ai lists the write tools. `ful
 `src/LifeOs.Api/Mcp/AgentWrites.cs` and `Mcp/Tools/CaptureTools.cs`; the tests:
 `tests/LifeOs.Tests/McpWriteTests.cs`.
 
+**2026-11-18:** step 2.2 of §5.6 is built. `full` is accepted, each writing client has a level of
+its own (decision 7), and Connected agents shows it. `full` lists no more tools than `capture`
+until step 2.3 adds them.
+
 ### 5.1 The switch
 
 `Mcp__Writes` has three levels: `off` (the default), `capture` and `full`. A write tool is
-listed and works only when all three hold:
-- the level includes it;
-- the calling client is in `Mcp__WriteClients`;
+listed and works only when both hold:
+- the calling client is in `Mcp__WriteClients`, at a level that includes the tool;
 - the client is linked to an AI-agent Person (§4.5).
+
+Each client in `Mcp__WriteClients` has a level of its own (decision 7): `<id>:full`, or the id
+alone for `capture`. `Mcp__Writes` is the ceiling: a client named at `full` writes at `capture`
+while `Mcp__Writes` is `capture`, and nothing writes while it's `off`. So raising the ceiling
+widens no client that wasn't named higher. A level that isn't `capture` or `full`, an entry
+with no id, or an id named twice fails startup. `McpWriteAccess.ToolLevels` gives each write
+tool the level it needs.
 
 Otherwise the tool isn't even listed, so agents don't see it, and it's refused if called
 anyway. The server's call filter refuses it, for every tool in `McpWriteAccess.Tools`, before
 the tool runs, so a new write tool is covered without remembering a check of its own (code review
-CR29).
+CR29). A tool above the client's level is refused in words that name both levels.
 
 ```bash
 fly secrets set Mcp__Writes=capture Mcp__WriteClients=<client id> -a lifeos-mz55-staging
+```
+
+and, for step 2.5, Chris's chats at `full` with the sweep's own client at `capture`:
+
+```bash
+fly secrets set Mcp__Writes=full Mcp__WriteClients=<chat client id>:full,<sweep client id> -a lifeos-mz55-staging
 ```
 
 Setting it back to `off` the same way turns writes off again. The client id is on the
@@ -979,8 +1008,9 @@ one must be named too. The allow list and the Person link are read on every call
 the client or unlinking its Person stops its writes at once.
 
 An agent can't tell why it has no write tools, so each time a client lists tools with writes on,
-the server logs which: `MCP write tools listed for <client id>`, or `MCP write tools hidden from
-<client id>: <why>`, the why being the condition above that failed. `fly logs -a
+the server logs which: `MCP write tools listed for <client id> at <level>`, or `MCP write tools
+hidden from <client id>: <why>`, the why being the condition above that failed. A call refused for
+its level logs that too. `fly logs -a
 lifeos-mz55-staging` shows it.
 
 **Rollout:**
@@ -1006,7 +1036,8 @@ dictation from the Reviews page answers.
 
 | Tool | Does | Calls |
 |---|---|---|
-| `set_status(item, status)` | Completes, cancels, starts, and so on, within the type's own statuses | `POST /api/status` |
+| `set_status(item, status)` | Completes, cancels, starts, and so on, within the type's own statuses. It pays as Chris's own status change does (decision 6) | `POST /api/status` |
+| `update_item(item, title?, fields?)` | Renames an item or sets its fields, under the rules `bsk set` and the item's form follow; reserved fields (`ReservedAttributes`) are refused | `POST /api/rename`, `/api/attributes` |
 | `check_off_habit(habit, day, done)` | Records adherence (GEN-5) | `POST /api/adhere` |
 | `timer(task, start \| stop)` | Starts or stops a task timer (TASKS-2) | `POST /api/timer` |
 | `create_item(type, title, fields, parent?)` | A new item, under the type's form rules, optionally under a parent (GEN-6, GEN-7) | `POST /api/subjects` |
@@ -1051,7 +1082,7 @@ web's "via Claude" isn't built yet.
   `add_journal_entry` and `create_item` are `destructiveHint: false`, since they only add.
   `set_status` is `idempotentHint: true`. Clients like Claude ask Chris before using a tool
   that isn't read-only, unless he has allowed it.
-- **Retries.** Each write tool takes an optional `request_id`, and the server
+- **Retries.** Each write tool that adds something takes an optional `request_id`, and the server
   instructions tell agents to send a new UUID for each write they intend. The id becomes
   the event's `external_id` under `mcp:<client_id>`, so a retried call writes once
   (invariant 5). Built: a retry answers with what the first call wrote and
@@ -1066,6 +1097,17 @@ web's "via Claude" isn't built yet.
   both see the capture with nothing filed yet, and nothing ties an Idea to one capture. A
   Problem can't be filed twice, since its title is unique (migration 0006) and the loser files
   the winner's.
+- **Retries at `full` (step 2.2).** `set_status`, `update_item`, `tag` and `link` take no
+  `request_id`, since saying the same thing again writes nothing: a status set to the one the
+  item already has records nothing and pays nothing (`StatusService`, `Unchanged`), and a title
+  or field set to its value writes no event. A Task with no status yet still records its first
+  one, though it reads as `Not started` already. `create_item` does take one, since every new
+  item gets a URN of its own: the item is born at its type's first status, and that
+  `state_change` carries the id (`SubjectCreationService`, `InitialStatus.ExternalId`). A retry,
+  or a call racing the first, answers the item the first call made, with its edge to a parent,
+  and makes nothing more; an Idea is flagged for the Inbox once. A type with no status (Person,
+  Area, ...) can't carry an id, and a Problem needs none, being unique by title
+  (`RequestRetryTests`).
 - **Undo** works the kernel's normal way: set a status back, or dismiss a capture in
   triage. Nothing an agent can do deletes anything.
 - **Records.** The access log records writes like reads, and the event store keeps them
@@ -1089,6 +1131,25 @@ Tests show (all done for `capture`, 2026-11-12, in `McpWriteTests`):
 On staging (not yet): Chris captures to his Inbox by voice through Claude on his phone
 (CAP-3's first step) and triages it in LifeOS, and the vault's nightly sweep dismisses the
 captures it files.
+
+### 5.6 Build order
+
+Planned with Chris on 2026-11-18, when he asked for agents to update items, their statuses and
+their comments. A comment is a journal entry, which `add_journal_entry` already writes. What
+§5.2's `full` level lacked was a way to edit an item, and the kernel needed three changes first:
+a status change wasn't safe to retry, a create made a second item when retried, and every
+writing agent got the same level.
+
+| Step | What | Done when |
+|---|---|---|
+| 2.1 | The `capture` level (above) | Done 2026-11-12, on for staging since 2026-11-13 |
+| 2.2 | Groundwork: `full` accepted; a level for each client (decision 7), listed and refused by level; Connected agents shows each agent's level; a status set to what it already is writes nothing; a create can carry a request id | Done 2026-11-18. Tests: a capture-level agent is listed and may call only the capture tools; a retried create makes one item; setting a status again writes nothing and pays nothing more |
+| 2.3 | Item tools at `full`: `set_status`, `update_item`, `create_item`, `tag`, `link`; the server instructions and the guide say what they do | Each tool's tests: refusals in words, items of a switched-off area refused, events carry the agent's source, history shows what changed from and to |
+| 2.4 | "via Claude" in the web: status history, journal entries, the Inbox and field changes show the agent's Person | Web unit, golden and a11y tests. Lands before 2.5 |
+| 2.5 | `full` on staging for Chris's chats, the sweep on its own connection at `capture` | A week of use; findings recorded here |
+| 2.6 | Records at `full`: `check_off_habit`, `timer`, `log_meal` (only with `food` on) | After a week of 2.3 |
+
+Phase 3's step 3.2 (Assign to, the queue, writes scoped to an agent's own Tasks) builds on 2.3.
 
 ## 6. Phase 3: an assistant that works on its own
 

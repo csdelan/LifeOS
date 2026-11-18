@@ -129,6 +129,108 @@ public sealed class RequestRetryTests(ClassDatabase classDb) : IClassFixture<Cla
             "SELECT count(*) FROM bsk.artifact WHERE content = @entry;", new { entry }, cancellationToken: Ct)));
     }
 
+    // Agent-access plan §5.4: a create is the one item write a retry could repeat, since each new
+    // item gets a fresh URN, so its request id rides on the status the item is born with.
+    [Fact]
+    public async Task Creates_racing_with_one_request_id_make_one_item_born_at_its_first_status()
+    {
+        await using var kernel = Kernel(out var source);
+        var creation = kernel.GetRequiredService<SubjectCreationService>();
+        var key = Guid.NewGuid().ToString();
+        var title = $"Stain the deck {Guid.NewGuid():N}";
+
+        var answers = await Task.WhenAll(Enumerable.Range(0, Racers).Select(_ =>
+            Task.Run(() => creation.CreateAsync(SubjectTypes.Task, title, "{}", externalId: key, cancellationToken: Ct), Ct)));
+
+        Assert.Single(answers.Select(a => a.Subject.Id).Distinct());
+        Assert.Single(answers, a => !a.AlreadyWritten);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = @title;", new { title }, cancellationToken: Ct)));
+        var born = await connection.QuerySingleAsync<(string Kind, string SubjectId, string Status)>(new CommandDefinition(
+            "SELECT kind, payload->>'subject_id', payload->>'status' FROM bsk.event WHERE source_id = @source AND external_id = @key;",
+            new { source, key }, cancellationToken: Ct));
+        Assert.Equal((EventKinds.StateChange, answers[0].Subject.Id.ToString(), "Not started"), born);
+    }
+
+    [Fact]
+    public async Task A_create_under_a_parent_retried_makes_one_child_and_one_edge()
+    {
+        await using var kernel = Kernel(out var source);
+        var project = await kernel.GetRequiredService<SubjectService>().CreateAsync(
+            SubjectTypes.Project, $"Deck {Guid.NewGuid():N}", cancellationToken: Ct);
+        var creation = kernel.GetRequiredService<SubjectCreationService>();
+        var key = Guid.NewGuid().ToString();
+        var title = $"Buy stain {Guid.NewGuid():N}";
+
+        var first = await creation.CreateAsync(SubjectTypes.Task, title, "{}", project.Urn, externalId: key, cancellationToken: Ct);
+        var again = await creation.CreateAsync(SubjectTypes.Task, title, "{}", project.Urn, externalId: key, cancellationToken: Ct);
+
+        Assert.False(first.AlreadyWritten);
+        Assert.Equal(project.Id, first.Link!.Parent.Id);
+        Assert.True(again.AlreadyWritten);
+        Assert.Equal(first.Subject.Id, again.Subject.Id);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = @title;", new { title }, cancellationToken: Ct)));
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject_relation WHERE from_subject = @child AND to_subject = @parent;",
+            new { child = first.Subject.Id, parent = project.Id }, cancellationToken: Ct)));
+        Assert.Equal(1, await EventsAsync(source, key));
+    }
+
+    [Fact]
+    public async Task A_request_id_used_for_a_capture_is_refused_for_a_create_and_nothing_is_made()
+    {
+        await using var kernel = Kernel(out _);
+        var key = Guid.NewGuid().ToString();
+        await kernel.GetRequiredService<InboxFilingService>().CaptureAsync($"Buy stain {Guid.NewGuid():N}", externalId: key, cancellationToken: Ct);
+        var title = $"Stain the rail {Guid.NewGuid():N}";
+
+        var refused = await Assert.ThrowsAsync<RequestReusedException>(() =>
+            kernel.GetRequiredService<SubjectCreationService>().CreateAsync(SubjectTypes.Task, title, "{}", externalId: key, cancellationToken: Ct));
+
+        Assert.Equal(RefusalKind.Conflict, refused.Kind);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal(0, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = @title;", new { title }, cancellationToken: Ct)));
+    }
+
+    [Fact]
+    public async Task A_type_with_no_status_cant_carry_a_request_id_and_nothing_is_made()
+    {
+        await using var kernel = Kernel(out _);
+        var name = $"Pat {Guid.NewGuid():N}";
+
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() =>
+            kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
+                SubjectTypes.Person, name, "{}", externalId: Guid.NewGuid().ToString(), cancellationToken: Ct));
+
+        Assert.Contains("has no status", refused.Message, StringComparison.Ordinal);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal(0, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.subject WHERE title = @name;", new { name }, cancellationToken: Ct)));
+    }
+
+    [Fact]
+    public async Task An_idea_created_again_with_its_request_id_is_flagged_for_the_inbox_once()
+    {
+        await using var kernel = Kernel(out _);
+        var creation = kernel.GetRequiredService<SubjectCreationService>();
+        var key = Guid.NewGuid().ToString();
+        var title = $"A deck bench {Guid.NewGuid():N}";
+
+        var first = await creation.CreateAsync(SubjectTypes.Idea, title, "{}", externalId: key, cancellationToken: Ct);
+        var again = await creation.CreateAsync(SubjectTypes.Idea, title, "{}", externalId: key, cancellationToken: Ct);
+
+        Assert.Equal(first.Subject.Id, again.Subject.Id);
+        Assert.False(again.FollowUpsPending);
+        await using var connection = new NpgsqlConnection(classDb.ConnectionString);
+        Assert.Equal(1, await connection.ExecuteScalarAsync<int>(new CommandDefinition(
+            "SELECT count(*) FROM bsk.event WHERE kind = 'triage' AND payload->>'item_id' = @item;",
+            new { item = first.Subject.Id.ToString() }, cancellationToken: Ct)));
+    }
+
     private async Task<int> EventsAsync(string source, string key)
     {
         await using var connection = new NpgsqlConnection(classDb.ConnectionString);

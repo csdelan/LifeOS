@@ -25,6 +25,7 @@ function record(clientId: string, extra: Partial<AgentRecord> = {}): AgentRecord
     actsAsAgentPerson: false,
     mayWrite: false,
     readOnlyBecause: null,
+    writeLevel: null,
     lastCallAt: null,
     callsThisWeek: 0,
     lastRefusedAt: null,

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Dapper;
 using LifeOs.Application.Abstractions;
 using LifeOs.Domain;
@@ -157,7 +158,23 @@ public sealed class NpgsqlSubjectRepository(NpgsqlDataSource dataSource, EventSo
                 },
                 transaction: transaction, cancellationToken: cancellationToken));
 
-        if (newSubject.Status is { } initial)
+        if (newSubject.Status is { ExternalId: { } request } once)
+        {
+            // A create that carries a request id: its first status carries the id, so a create
+            // its source already made is refused here and rolled back with the transaction.
+            var made = await EventSql.InsertOnceAsync(
+                connection,
+                new NewEvent(
+                    EventKinds.StateChange, Provenances.Declared, once.At, once.At, once.SourceId, request,
+                    JsonSerializer.Serialize(new { subject_id = id.ToString(), status = once.Status })),
+                transaction,
+                cancellationToken);
+            if (made is null)
+            {
+                throw new RequestAlreadyWrittenException(once.SourceId, request);
+            }
+        }
+        else if (newSubject.Status is { } initial)
         {
             await connection.ExecuteAsync(new CommandDefinition(
                 """

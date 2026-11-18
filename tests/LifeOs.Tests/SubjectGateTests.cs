@@ -140,8 +140,8 @@ public sealed class SubjectGateTests(ClassDatabase classDb) : IClassFixture<Clas
         {
             await Assert.ThrowsAsync<SubjectGateException>(() => subjects.CreateAsync(SubjectTypes.Habit, title, cancellationToken: Ct)),
             await Assert.ThrowsAsync<SubjectGateException>(() => creation.CreateAsync(SubjectTypes.Habit, title, "{}", cancellationToken: Ct)),
-            await Assert.ThrowsAsync<SubjectGateException>(() => creation.CreateAsync(SubjectTypes.Habit, title, "{}", project.Urn, SubjectRelations.Serves, Ct)),
-            await Assert.ThrowsAsync<SubjectGateException>(() => creation.CreateAsync(SubjectTypes.Habit, title, "{}", goal.Urn, SubjectRelations.Supersedes, Ct)),
+            await Assert.ThrowsAsync<SubjectGateException>(() => creation.CreateAsync(SubjectTypes.Habit, title, "{}", project.Urn, SubjectRelations.Serves, cancellationToken: Ct)),
+            await Assert.ThrowsAsync<SubjectGateException>(() => creation.CreateAsync(SubjectTypes.Habit, title, "{}", goal.Urn, SubjectRelations.Supersedes, cancellationToken: Ct)),
             await Assert.ThrowsAsync<SubjectGateException>(() => kernel.GetRequiredService<PromotionService>().PromoteAsync(capture.EventId, SubjectTypes.Habit, title, Ct)),
         };
         Assert.All(refusals, refusal => Assert.Equal(SubjectGates.HabitNeedsParent, refusal.Message));
@@ -159,8 +159,8 @@ public sealed class SubjectGateTests(ClassDatabase classDb) : IClassFixture<Clas
         // Serving a Goal or an Identity Statement, each door makes one, Planned as every new Habit is.
         var made = new List<Guid>
         {
-            (await creation.CreateAsync(SubjectTypes.Habit, Unique("goal habit"), "{}", goal.Urn, SubjectRelations.Serves, Ct)).Subject.Id,
-            (await creation.CreateAsync(SubjectTypes.Habit, Unique("value habit"), "{}", value.Urn, SubjectRelations.Serves, Ct)).Subject.Id,
+            (await creation.CreateAsync(SubjectTypes.Habit, Unique("goal habit"), "{}", goal.Urn, SubjectRelations.Serves, cancellationToken: Ct)).Subject.Id,
+            (await creation.CreateAsync(SubjectTypes.Habit, Unique("value habit"), "{}", value.Urn, SubjectRelations.Serves, cancellationToken: Ct)).Subject.Id,
         };
         var bsk = await BskAsync(["new", "Habit", Unique("bsk habit"), "--parent", goal.Urn, "--relation", "serves", "--json"]);
         Assert.True(bsk.Exit == 0, bsk.Error);
@@ -189,7 +189,7 @@ public sealed class SubjectGateTests(ClassDatabase classDb) : IClassFixture<Clas
         var other = await subjects.CreateAsync(SubjectTypes.Goal, Unique("second goal"), cancellationToken: Ct);
         var project = await subjects.CreateAsync(SubjectTypes.Project, Unique("served project"), cancellationToken: Ct);
         var habit = (await kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
-            SubjectTypes.Habit, Unique("kept habit"), "{}", goal.Urn, SubjectRelations.Serves, Ct)).Subject;
+            SubjectTypes.Habit, Unique("kept habit"), "{}", goal.Urn, SubjectRelations.Serves, cancellationToken: Ct)).Subject;
         await relations.LinkAsync(habit.Urn, SubjectRelations.Serves, other.Urn, Ct);
         await relations.LinkAsync(habit.Urn, SubjectRelations.Serves, project.Urn, Ct);
 
@@ -226,7 +226,7 @@ public sealed class SubjectGateTests(ClassDatabase classDb) : IClassFixture<Clas
         var value = await subjects.CreateAsync(
             SubjectTypes.Value, Unique("race value"), """{"statement": "I finish what I start."}""", cancellationToken: Ct);
         var habit = (await kernel.GetRequiredService<SubjectCreationService>().CreateAsync(
-            SubjectTypes.Habit, Unique("race habit"), "{}", goal.Urn, SubjectRelations.Serves, Ct)).Subject;
+            SubjectTypes.Habit, Unique("race habit"), "{}", goal.Urn, SubjectRelations.Serves, cancellationToken: Ct)).Subject;
         await relations.LinkAsync(habit.Urn, SubjectRelations.Serves, value.Urn, Ct);
 
         var outcomes = await Task.WhenAll(

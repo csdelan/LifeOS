@@ -31,10 +31,15 @@ export type AgentRecord = {
   personName: string | null;
   /** Its Person is an AI agent in use: the Person an agent must act as to write. */
   actsAsAgentPerson: boolean;
-  /** `/mcp` lets it write at `Mcp:Writes`'s level, by the rule each call is checked against. */
+  /** `/mcp` lets it write at `writeLevel`, by the rule each call is checked against. */
   mayWrite: boolean;
   /** Why it can only read, in the server log's words; null when it may write. */
   readOnlyBecause: string | null;
+  /**
+   * The level it writes at, "capture" or "full" (agent-access plan §5.1, decision 7): the level
+   * `Mcp:WriteClients` names it at, held to `Mcp:Writes`. Null when it can't write.
+   */
+  writeLevel: string | null;
   lastCallAt: string | null;
   callsThisWeek: number;
   lastRefusedAt: string | null;
@@ -44,18 +49,25 @@ export type AgentRecord = {
 export type AgentsOverview = {
   /** `Mcp:Enabled`: off, no agent can call LifeOS. */
   mcpEnabled: boolean;
-  /** `Mcp:Writes`: "off" (read-only) or "capture" (Inbox and journal writes, agent-access plan §5.2). */
+  /**
+   * `Mcp:Writes`, the most any agent may change: "off" (read-only), "capture" (Inbox and journal
+   * writes) or "full" (agent-access plan §5.2). Each agent writes at its own `writeLevel`.
+   */
   writes: string;
   agents: AgentRecord[];
 };
 
-/** What each `Mcp:Writes` level lets an agent do, in Chris's words. */
+/**
+ * What each write level lets an agent do, in Chris's words. `full` lists only what's built: the
+ * item tools come in agent-access plan §5.6, step 2.3.
+ */
 const WRITE_LEVELS: Record<string, string> = {
   capture: "capture to the Inbox and the journal",
+  full: "capture to the Inbox and the journal",
 };
 
-function writeLevel(writes: string): string {
-  return WRITE_LEVELS[writes] ?? `write (Mcp:Writes is ${writes})`;
+function writeLevel(level: string): string {
+  return WRITE_LEVELS[level] ?? `write (at the ${level} level)`;
 }
 
 /**
@@ -65,13 +77,14 @@ function writeLevel(writes: string): string {
 export function writesText(writes: string): string {
   return writes === "off"
     ? "Read-only: agents can't change anything in LifeOS."
-    : `Agents you let write can ${writeLevel(writes)}; the rest only read. An agent writes when Mcp:WriteClients names it and it acts as an AI-agent Person.`;
+    : `Agents you let write can ${writeLevel(writes)}, each at the level Mcp:WriteClients names it at; the rest only read. An agent writes when Mcp:WriteClients names it and it acts as an AI-agent Person.`;
 }
 
 /** What one allowed agent may do, as its card says it. */
 export function accessText(writes: string, record: AgentRecord | null): string {
   if (record?.mayWrite) {
-    return `It can read LifeOS and ${writeLevel(writes)} as ${record.personName ?? "its Person"}.`;
+    const level = record.writeLevel ?? writes;
+    return `It can read LifeOS and ${writeLevel(level)} as ${record.personName ?? "its Person"} (${level} level).`;
   }
   return writes === "off" || !record?.readOnlyBecause
     ? "It can read LifeOS."

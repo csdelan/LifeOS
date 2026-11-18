@@ -28,7 +28,7 @@ internal static class TestHabits
 
         var goal = await subjects.CreateAsync(SubjectTypes.Goal, $"{title} goal", cancellationToken: cancellationToken);
         return (await subjects.CreateWithParentEdgeAsync(
-            type, title, attributesJson, SubjectRelations.Serves, goal, cancellationToken)).Child;
+            type, title, attributesJson, SubjectRelations.Serves, goal, cancellationToken: cancellationToken)).Child;
     }
 
     public static Task<SubjectRef> CreateTrackedHabitAsync(

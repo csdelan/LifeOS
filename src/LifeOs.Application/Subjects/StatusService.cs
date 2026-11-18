@@ -30,6 +30,12 @@ namespace LifeOs.Application.Subjects;
 /// A Goal becomes Active only with a target date (GEN-8, <see cref="SubjectGates"/>, code review
 /// CR125); one already Active without one isn't refused for being set Active again.
 /// </para>
+/// <para>
+/// A status set to the one the subject already has writes nothing and pays nothing (agent-access
+/// plan §5.6, step 2.2): the answer is <see cref="StatusResult.Unchanged"/>. So a retried change,
+/// from an agent whose call timed out or a page sent twice, writes once, and the log holds only
+/// moves. A subject with no status yet has none to match, so setting its first word writes it.
+/// </para>
 /// </summary>
 public sealed class StatusService(
     SubjectService subjects, IEventStore events, RewardService rewards, IClock clock, EventSource eventSource,
@@ -45,6 +51,12 @@ public sealed class StatusService(
 
         var subject = await subjects.ResolveAsync(reference, cancellationToken);
         var status = VocabularyStatus(subject.Type, newStatus);
+        if (await repository.GetStatusAsync(subject.Id, cancellationToken) is { } current
+            && string.Equals(StatusVocabulary.Canonical(subject.Type, current), status, StringComparison.Ordinal))
+        {
+            return new StatusResult(null, subject, status, [], []) { Unchanged = true };
+        }
+
         if (subject.Type == SubjectTypes.Goal)
         {
             await CheckGoalAsync(subject, status, cancellationToken);
@@ -137,12 +149,16 @@ public sealed class StatusService(
 }
 
 /// <summary>
-/// The outcome of a status change: the state_change event, the subject, any ledger entries it
-/// earned or reversed, and each life domain whose level or rank that changed.
+/// The outcome of a status change: the state_change event (null when the status was already
+/// that), the subject, any ledger entries it earned or reversed, and each life domain whose level
+/// or rank that changed.
 /// </summary>
 public sealed record StatusResult(
-    Guid EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress)
+    Guid? EventId, SubjectRef Subject, string Status, IReadOnlyList<Award> Awards, IReadOnlyList<DomainChange> Progress)
 {
+    /// <summary>The subject already had this status, so nothing was written.</summary>
+    public bool Unchanged { get; init; }
+
     /// <summary>The repetitions it made, when it closed one of a repeating Task's (D16).</summary>
     public IReadOnlyList<SubjectRef> Repetitions { get; init; } = [];
 

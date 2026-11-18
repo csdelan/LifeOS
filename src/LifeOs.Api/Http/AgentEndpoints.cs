@@ -47,6 +47,7 @@ public static class AgentEndpoints
         {
             agent.ReadOnlyBecause = McpWriteAccess.ReadOnlyBecause(mcp, agent);
             agent.MayWrite = agent.ReadOnlyBecause is null;
+            agent.WriteLevel = McpWriteAccess.LevelOf(mcp, agent);
         }
 
         // Writes and each agent's say come from the settings /mcp runs on, so the page can't call
@@ -175,8 +176,9 @@ public sealed class AgentsRead
     public bool McpEnabled { get; set; }
 
     /// <summary>
-    /// What agents may change (<c>Mcp:Writes</c>): <c>off</c>, read-only, or <c>capture</c>, the
-    /// Inbox and journal writes of agent-access plan §5.2, for the agents whose <c>MayWrite</c> is true.
+    /// The most any agent may change (<c>Mcp:Writes</c>): <c>off</c>, read-only, <c>capture</c>, the
+    /// Inbox and journal writes of agent-access plan §5.2, or <c>full</c>, which also changes items.
+    /// Each agent whose <c>MayWrite</c> is true writes at its own <c>WriteLevel</c>, at most this.
     /// </summary>
     public string Writes { get; set; } = McpWrites.Off;
 

@@ -31,9 +31,12 @@ public sealed record NewSubject(
 
 /// <summary>
 /// The status a new subject is born with (<c>StatusVocabulary.InitialStatusFor</c>): the
-/// word, when it was set and which source set it, as a status change would carry them.
+/// word, when it was set and which source set it, as a status change would carry them. A create
+/// that carries a request id (agent-access plan §5.4) is born at its type's first status, and
+/// <paramref name="ExternalId"/> is that id: the source writes it once (invariant 5), so a retry
+/// finds the item its first call made.
 /// </summary>
-public sealed record InitialStatus(string Status, DateTimeOffset At, string SourceId);
+public sealed record InitialStatus(string Status, DateTimeOffset At, string SourceId, string? ExternalId = null);
 
 /// <summary>When a flag into the Inbox was set and which source set it, as a triage event carries them.</summary>
 public sealed record TriageStamp(DateTimeOffset At, string SourceId);

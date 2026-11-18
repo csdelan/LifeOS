@@ -211,13 +211,36 @@ describe("ConnectedAgents", () => {
   // Code review CR64: the page said read-only while agents were capturing to the Inbox.
   it("says agents may write when writes are on, and which one does as whom", async () => {
     overrides.writes = "capture";
-    overrides.claude = { mayWrite: true, readOnlyBecause: null, personId: "p-1", personName: "Claude agent" };
+    overrides.claude = {
+      mayWrite: true,
+      readOnlyBecause: null,
+      writeLevel: "capture",
+      personId: "p-1",
+      personName: "Claude agent",
+    };
     renderSection();
     expect(await screen.findByText(/Agents you let write can capture to the Inbox and the journal/)).toBeInTheDocument();
     expect(screen.queryByText(/Read-only/)).not.toBeInTheDocument();
     expect(
-      within(card("Claude")).getByText(/It can read LifeOS and capture to the Inbox and the journal as Claude agent\./),
+      within(card("Claude")).getByText(
+        /It can read LifeOS and capture to the Inbox and the journal as Claude agent \(capture level\)\./,
+      ),
     ).toBeInTheDocument();
+  });
+
+  // Agent-access plan §2 decision 7: each agent writes at its own level, held to Mcp:Writes.
+  it("says the level each writing agent is named at", async () => {
+    overrides.writes = "full";
+    overrides.claude = {
+      mayWrite: true,
+      readOnlyBecause: null,
+      writeLevel: "full",
+      personId: "p-1",
+      personName: "Claude agent",
+    };
+    renderSection();
+    expect(await screen.findByText(/each at the level Mcp:WriteClients names it at/)).toBeInTheDocument();
+    expect(within(card("Claude")).getByText(/as Claude agent \(full level\)\./)).toBeInTheDocument();
   });
 
   it("says why an allowed agent only reads while writes are on", async () => {
