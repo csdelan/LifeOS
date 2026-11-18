@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { CircleCheckIcon, CircleSlashIcon } from "lucide-react";
+import { toast } from "sonner";
 import { WorkoutIcon } from "@/components/activity/workout-parts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -69,6 +70,10 @@ function NoteEditor({ workout }: { workout: WorkoutRow }) {
         if (alive.current) {
           setError(errorText(e, "Something went wrong."));
           setStatus("error");
+        } else {
+          // The sheet closed before this save failed, so its inline error has nowhere to show;
+          // say it, or the typed note is lost without a word (code review CR144).
+          toast.error(`The workout note wasn't saved: ${errorText(e, "Something went wrong.")}`);
         }
       }
     });

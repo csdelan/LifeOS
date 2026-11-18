@@ -281,6 +281,21 @@ describe("Activity page (activity plan §3.7)", () => {
     expect(save).toHaveBeenCalledTimes(1);
   });
 
+  // Code review CR144: the sheet is gone by the time the save on closing fails, so its inline
+  // error has nowhere to show, and the typed note was lost without a word.
+  it("says so when the note saved on closing fails", async () => {
+    vi.spyOn(writes, "setWorkoutNote").mockRejectedValueOnce(new Error("The server is down."));
+    renderPage();
+    const exercise = await card("Exercise");
+    await userEvent.click((await exercise.findAllByTestId("workout-row"))[0]);
+    const sheet = await screen.findByRole("dialog");
+    await userEvent.type(within(sheet).getByRole("textbox", { name: "Note" }), "Typed then closed");
+    await userEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("The workout note wasn't saved: The server is down."),
+    );
+  });
+
   it("offers Connect Oura before connecting, says what it reads, and doesn't sync", async () => {
     setMockOura({ state: "not_connected", connected: false, lastSyncedAt: null });
     const sync = vi.spyOn(writes, "syncActivity");
