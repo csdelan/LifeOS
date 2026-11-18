@@ -54,7 +54,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.Contains($"MCP write tools listed for {Writer} at capture", log.Messages("LifeOs.Api.Mcp"));
 
         var writing = tools.Where(t => t.ProtocolTool.Annotations?.ReadOnlyHint != true).Select(t => t.Name).Order();
-        Assert.Equal(McpWriteAccess.Tools.Order(), writing);
+        Assert.Equal(McpWriteAccess.ToolsAt(McpWrites.Capture).Order(), writing);
         Assert.All(
             tools.Where(t => McpWriteAccess.Tools.Contains(t.Name)),
             t => Assert.False(t.ProtocolTool.Annotations?.DestructiveHint ?? true, $"{t.Name} is marked destructive"));
@@ -589,7 +589,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
     }
 
     /// <summary>Allows <paramref name="clientId"/> and links it to a new AI-agent Person, as Connected agents does.</summary>
-    private static async Task<Guid> ActAsAiPersonAsync(ApiTestHost host, string clientId)
+    internal static async Task<Guid> ActAsAiPersonAsync(ApiTestHost host, string clientId)
     {
         await McpServerTests.AllowAsync(host, clientId);
         var person = await PostSubjectAsync(host, new
@@ -603,7 +603,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         return person;
     }
 
-    private static async Task<(Guid Id, string Urn)> PostTaskAsync(ApiTestHost host, string title)
+    internal static async Task<(Guid Id, string Urn)> PostTaskAsync(ApiTestHost host, string title)
     {
         var response = await host.Client.PostAsJsonAsync("api/subjects", new { type = SubjectTypes.Task, title }, Ct);
         var text = await response.Content.ReadAsStringAsync(Ct);
@@ -612,7 +612,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         return (json.GetProperty("id").GetGuid(), json.GetProperty("urn").GetString()!);
     }
 
-    private static async Task<Guid> PostSubjectAsync(ApiTestHost host, object body)
+    internal static async Task<Guid> PostSubjectAsync(ApiTestHost host, object body)
     {
         var response = await host.Client.PostAsJsonAsync("api/subjects", body, Ct);
         var text = await response.Content.ReadAsStringAsync(Ct);
@@ -620,14 +620,14 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         return JsonDocument.Parse(text).RootElement.GetProperty("id").GetGuid();
     }
 
-    private static async Task PostOkAsync(ApiTestHost host, string path, object body)
+    internal static async Task PostOkAsync(ApiTestHost host, string path, object body)
     {
         var response = await host.Client.PostAsJsonAsync(path, body, Ct);
         var text = await response.Content.ReadAsStringAsync(Ct);
         Assert.True(response.IsSuccessStatusCode, $"POST {path} → {(int)response.StatusCode}: {text}");
     }
 
-    private static async Task<IReadOnlyList<string>> NamesAsync(McpClient client)
+    internal static async Task<IReadOnlyList<string>> NamesAsync(McpClient client)
         => (await client.ListToolsAsync(cancellationToken: Ct)).Select(t => t.Name).ToList();
 
     /// <summary>Whether a call is refused: an error answer, or no such tool at all.</summary>
@@ -646,7 +646,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
     private static async Task<List<JsonElement>> InboxAsync(McpClient client)
         => (await CallAsync(client, "inbox", new() { ["limit"] = 200 })).GetProperty("items").EnumerateArray().ToList();
 
-    private static async Task<JsonElement> CallAsync(McpClient client, string tool, Dictionary<string, object?>? arguments = null)
+    internal static async Task<JsonElement> CallAsync(McpClient client, string tool, Dictionary<string, object?>? arguments = null)
     {
         var result = await client.CallToolAsync(tool, arguments, cancellationToken: Ct);
         var text = Text(result);
@@ -655,7 +655,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         return JsonDocument.Parse(json).RootElement.Clone();
     }
 
-    private static string Text(CallToolResult result)
+    internal static string Text(CallToolResult result)
         => string.Concat(result.Content.OfType<TextContentBlock>().Select(b => b.Text));
 
     private static async Task<int> AgentEventsAsync(DomainTestDatabase db)

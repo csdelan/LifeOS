@@ -4666,7 +4666,9 @@ from that; Chris to confirm.)*
   write needs both, and a client linked to an AI-agent Person. The `capture` level is built and on
   for staging since 2026-11-12: `capture`, `add_journal_entry`, `dismiss` (raw captures only)
   and `link_reflection` (plan §5.2). `full` (status, check-offs, timers, create, relate, tag,
-  meals) is accepted since 2026-11-18 but adds no tools until plan §5.6 step 2.3.
+  meals) is built for items since 2026-11-18 (plan §5.6 step 2.3): `set_status`, `update_item`,
+  `create_item`, `tag` and `link`; check-offs, timers and meals are step 2.6. A repeating Task's
+  pattern and a Review stay Chris's.
 - Implications: a `request_id` makes a retry write once. Nothing an agent can do deletes
   anything, and some writes have no tool at any level: archive, any delete, rewards, exception
   days, Oura, covers (plan §5.2). Undo is the kernel's usual: a status set back, a capture

@@ -45,6 +45,13 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
         ["add_journal_entry"] = McpWrites.Capture,
         ["dismiss"] = McpWrites.Capture,
         ["link_reflection"] = McpWrites.Capture,
+
+        // Agent-access plan §5.6 step 2.3: changing Chris's items.
+        ["set_status"] = McpWrites.Full,
+        ["update_item"] = McpWrites.Full,
+        ["create_item"] = McpWrites.Full,
+        ["tag"] = McpWrites.Full,
+        ["link"] = McpWrites.Full,
     };
 
     /// <summary>Every write tool, at any level.</summary>
@@ -263,7 +270,7 @@ public sealed class AgentWrites(
 
     private static JsonObject Person(McpAgent agent) => new() { [PersonField] = agent.PersonId.ToString() };
 
-    private static string Article(string word) => word.Length > 0 && "AEIOUaeiou".Contains(word[0]) ? "an" : "a";
+    internal static string Article(string word) => word.Length > 0 && "AEIOUaeiou".Contains(word[0]) ? "an" : "a";
 
     private static string Body(string text)
     {
@@ -279,7 +286,7 @@ public sealed class AgentWrites(
                 $"text is {body.Length:N0} characters; the most is {PlanTools.MaxCaptureLength:N0}. Split it into parts, each with its own request_id.");
     }
 
-    private static string? RequestKey(string? requestId)
+    internal static string? RequestKey(string? requestId)
     {
         var key = requestId?.Trim();
         if (string.IsNullOrEmpty(key))
@@ -295,7 +302,7 @@ public sealed class AgentWrites(
     private static string Payload(McpAgent agent)
         => JsonSerializer.Serialize(new Dictionary<string, Guid> { [PersonField] = agent.PersonId });
 
-    private static McpItemRef Ref(SubjectRef subject) => new(subject.Id, subject.Urn, subject.Type, subject.Title);
+    internal static McpItemRef Ref(SubjectRef subject) => new(subject.Id, subject.Urn, subject.Type, subject.Title);
 
     /// <summary>The item an id or URN names, as <c>get_item</c> finds it, or a refusal the agent can act on.</summary>
     private async Task<McpItemRef> FindAsync(string reference, string name, CancellationToken cancellationToken)
@@ -303,8 +310,12 @@ public sealed class AgentWrites(
         var detail = await reader.FindByIdOrUrnAsync(reference, cancellationToken);
         return detail is not null && options.AllowsType(detail.Type)
             ? new McpItemRef(detail.Id, detail.Urn, detail.Type, detail.Title)
-            : throw new McpException($"{name}: no item has the id or URN '{reference}'. Find one with find_items or list_items.");
+            : throw NotFound(name, reference);
     }
+
+    /// <summary>The refusal for an id or URN that names no item an agent may see.</summary>
+    internal static McpException NotFound(string name, string reference)
+        => new($"{name}: no item has the id or URN '{reference}'. Find one with find_items or list_items.");
 
     /// <summary>The services for one agent, from its own kernel, writing as its source.</summary>
     private AgentKernel Kernel(McpAgent agent)

@@ -44,8 +44,11 @@ public sealed class McpGuide
         Writing: Chris may allow you to write. If capture, add_journal_entry, dismiss and
         link_reflection are in your tools, you can add to his Inbox and his journals, clear a raw
         capture you've dealt with from the Inbox, and link a review to the reflection note that
-        answers it; nothing else changes. Write only what he asked for or agreed to. Send a new
-        UUID as request_id with each write you mean to make, and the same one if you retry it.
+        answers it. If set_status, update_item, create_item, tag and link are there too, you can
+        also change his items and make new ones. Nothing deletes anything. Write only what he
+        asked for or agreed to, and name items by id or URN, never by title. Send a new UUID as
+        request_id with each write that takes one, and the same one if you retry it; the others
+        write nothing when said again.
         """;
 
     /// <summary>The guide's section on writing, added when <c>Mcp:Writes</c> is on.</summary>
@@ -54,9 +57,9 @@ public sealed class McpGuide
 
         ## Writing
 
-        When Chris has allowed your agent to write, four more tools are listed. Each one adds,
-        clears a capture from the Inbox, or links a review to its reflection; none changes or
-        removes anything else.
+        When Chris has allowed your agent to write, more tools are listed, as many as the level
+        he set it at. At the capture level there are four. Each one adds, clears a capture from
+        the Inbox, or links a review to its reflection; none changes or removes anything else.
 
         - capture: a note, idea or problem in his Inbox, for him to triage like his own captures.
           An idea or problem becomes an Idea or Problem item at once, titled by the first line.
@@ -69,9 +72,29 @@ public sealed class McpGuide
           otherwise name the review by kind and day, which opens it if it isn't yet. Linking again
           replaces the link. It never completes the review: Chris does that.
 
+        At the full level, five more change his items as he does on their pages:
+
+        - set_status: a status from the item's type (the table above). Completing pays what the
+          item earns, as it would for Chris; moving it off Completed takes that back.
+        - update_item: a new title, and the type's own fields: a Task's description, due,
+          scheduled, priority (Low, Medium, High), estimated_duration (45m, 1h 30m) and area; a
+          Goal's or Project's description, target_date and area; most others' description and
+          area. Days are yyyy-MM-dd and an area is an Area's id or URN; "" clears a field. The
+          answer gives each change from and to.
+        - create_item: a Task, Project, Problem, Idea or Decision, optionally under a parent (a
+          Task serves a Project, a Project results in a Goal), with the same fields. A Problem
+          or Idea also waits in his Inbox.
+        - tag: adds or removes an item's tags.
+        - link: links one item to another (serves, results_in, supersedes), or removes the link.
+
+        A repeating Task's series (its pattern, whether it repeats, its dates) and a Review are
+        his: change one repetition instead, and link a review with link_reflection. Archiving,
+        deleting, rewards and covers have no tool.
+
         Everything you write is marked as your agent's and the Person it acts as. Send a new UUID
-        as request_id with each write; a retry with the same one writes nothing new and answers
-        already_done.
+        as request_id with each capture, journal entry, reflection link and new item; a retry
+        with the same one writes nothing new and answers already_done. The other writes take
+        none: a status, title, field, tag or link set to what it already is writes nothing.
         """;
 
     public const string Guide = """

@@ -820,23 +820,28 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .ToList();
 
-        Assert.Equal(9, toolTypes.Count);
+        Assert.Equal(10, toolTypes.Count);
         foreach (var type in toolTypes)
         {
             // The write tools (§5.2) also take who's writing and the writes they can make, nothing else.
-            HashSet<Type> allowed = type == typeof(CaptureTools)
-                ? [.. readers, typeof(McpWriteAccess), typeof(AgentWrites)]
+            HashSet<Type> allowed = type == typeof(CaptureTools) ? [.. readers, typeof(McpWriteAccess), typeof(AgentWrites)]
+                : type == typeof(ItemWriteTools) ? [.. readers, typeof(McpWriteAccess), typeof(AgentItemWrites)]
                 : readers;
             var parameters = type.GetConstructors().Single().GetParameters();
             Assert.All(parameters, p => Assert.True(allowed.Contains(p.ParameterType), $"{type.Name} takes {p.ParameterType.Name}"));
         }
 
-        var writeTools = typeof(CaptureTools).GetMethods()
+        var writeTools = new[] { typeof(CaptureTools), typeof(ItemWriteTools) }
+            .SelectMany(t => t.GetMethods())
             .Select(m => m.GetCustomAttribute<McpServerToolAttribute>())
             .OfType<McpServerToolAttribute>()
             .ToList();
         Assert.Equal(McpWriteAccess.Tools.Order(), writeTools.Select(t => t.Name!).Order());
-        Assert.All(writeTools, t => Assert.False(t.Destructive, $"{t.Name} is marked destructive"));
+        // A tool that only adds says so (§5.4); one that changes what's there doesn't, and saying
+        // the same thing to it again changes nothing.
+        string[] adding = ["capture", "add_journal_entry", "dismiss", "link_reflection", "create_item"];
+        Assert.All(writeTools, t => Assert.Equal(!adding.Contains(t.Name), t.Destructive));
+        Assert.All(writeTools.Where(t => t.Destructive), t => Assert.True(t.Idempotent, $"{t.Name} isn't marked idempotent"));
     }
 
     [Fact]
@@ -844,7 +849,7 @@ public sealed class McpServerTests(PostgresFixture postgres, ClassDatabase class
     {
         // The host lists an area's tools from McpAreas (code review CR115), so a tool type of a
         // new area that isn't in the table would never be listed.
-        Type[] core = [typeof(SnapshotTools), typeof(ItemTools), typeof(RecordTools), typeof(PlanTools), typeof(CaptureTools)];
+        Type[] core = [typeof(SnapshotTools), typeof(ItemTools), typeof(RecordTools), typeof(PlanTools), typeof(CaptureTools), typeof(ItemWriteTools)];
         var toolTypes = typeof(McpHost).Assembly.GetTypes()
             .Where(t => t.GetCustomAttribute<McpServerToolTypeAttribute>() is not null)
             .Select(t => t.Name)

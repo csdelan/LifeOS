@@ -58,12 +58,12 @@ export type AgentsOverview = {
 };
 
 /**
- * What each write level lets an agent do, in Chris's words. `full` lists only what's built: the
- * item tools come in agent-access plan §5.6, step 2.3.
+ * What each write level lets an agent do, in Chris's words (agent-access plan §5.2): `full` adds
+ * the item tools, a status, title, fields, tags and links, and new items (§5.6, step 2.3).
  */
 const WRITE_LEVELS: Record<string, string> = {
   capture: "capture to the Inbox and the journal",
-  full: "capture to the Inbox and the journal",
+  full: "capture to the Inbox and the journal, and change and add items",
 };
 
 function writeLevel(level: string): string {

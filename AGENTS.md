@@ -29,7 +29,7 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
   connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture` or `full`: then the
   clients named in `Mcp:WriteClients`, each at its own level (`<id>:full`, or the id alone for
   capture) up to that ceiling, can capture to the Inbox, journal, dismiss raw captures and link a
-  review to its vault reflection, as `mcp:<client_id>`. A write tool goes in
+  review to its vault reflection, and at full change items and make new ones, as `mcp:<client_id>`. A write tool goes in
   `McpWriteAccess.ToolLevels` at the level it needs (`docs/pilot/agent-access-plan.md` §5).
   A feature whose events carry a new payload key, or that owns an attribute key on items of any
   type (as rewards owns `bounty`), adds it to `McpAreas`: an event no area claims

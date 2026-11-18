@@ -969,9 +969,11 @@ Claude Code on PICARD signs in as too, and claude.ai lists the write tools. `ful
 `src/LifeOs.Api/Mcp/AgentWrites.cs` and `Mcp/Tools/CaptureTools.cs`; the tests:
 `tests/LifeOs.Tests/McpWriteTests.cs`.
 
-**2026-11-18:** step 2.2 of §5.6 is built. `full` is accepted, each writing client has a level of
-its own (decision 7), and Connected agents shows it. `full` lists no more tools than `capture`
-until step 2.3 adds them.
+**2026-11-18:** steps 2.2 and 2.3 of §5.6 are built. `full` is accepted, each writing client
+has a level of its own (decision 7), and Connected agents shows it. At `full` an agent also has
+`set_status`, `update_item`, `create_item`, `tag` and `link` (§5.2): `src/LifeOs.Api/Mcp/AgentItemWrites.cs`
+and `Mcp/Tools/ItemWriteTools.cs`, tested in `tests/LifeOs.Tests/McpItemWriteTests.cs`. Staging
+stays at `capture` until step 2.5.
 
 ### 5.1 The switch
 
@@ -1032,17 +1034,28 @@ lifeos-mz55-staging` shows it.
 The connector's `inbox` shows each capture's `concerns`, so the agent sees the review a
 dictation from the Reviews page answers.
 
-**`full`** adds these:
+**`full`** adds these (built in step 2.3, 2026-11-18):
 
 | Tool | Does | Calls |
 |---|---|---|
-| `set_status(item, status)` | Completes, cancels, starts, and so on, within the type's own statuses. It pays as Chris's own status change does (decision 6) | `POST /api/status` |
-| `update_item(item, title?, fields?)` | Renames an item or sets its fields, under the rules `bsk set` and the item's form follow; reserved fields (`ReservedAttributes`) are refused | `POST /api/rename`, `/api/attributes` |
+| `set_status(item, status)` | Completes, cancels, starts, and so on, within the type's own statuses. It pays as Chris's own status change does (decision 6); the answer shows what it paid only while the rewards area is on | `POST /api/status`'s `StatusService` |
+| `update_item(item, title?, description?, due?, scheduled?, priority?, estimated_duration?, area?, target_date?)` | Renames an item and sets or clears (`""`) the fields its type's page has (`AgentItemWrites.FieldTypes`): a Task's description, due, scheduled, priority, estimated duration and area; a Goal's or Project's description, target date and area; most others' description and area. Days are `yyyy-MM-dd`, a priority Low, Medium or High, an area an Area's id or URN. Only what differs is written, and the answer gives each change from and to | `POST /api/rename`'s `RenameService` and `/api/attributes`' `AttributeService` |
+| `create_item(type, title, parent?, relation?, fields..., request_id?)` | A Task, Project, Problem, Idea or Decision, optionally under a parent, with the same fields. A Problem or Idea is flagged for the Inbox, and a Problem titled like one already there is that one | `POST /api/subjects`' `SubjectCreationService` |
+| `tag(item, add?, remove?)` | Adds and removes an item's tags | `POST /api/tag`'s `TagService` |
+| `link(from, relation, to, remove?)` | Links one item to another (`serves`, `results_in`, `supersedes`) or removes the link, under the kernel's rules: nothing serves a Task, no loops, a Habit keeps its last parent | `POST /api/link`'s `RelationService` |
+
+Step 2.6 adds, after a week of these:
+
+| Tool | Does | Calls |
+|---|---|---|
 | `check_off_habit(habit, day, done)` | Records adherence (GEN-5) | `POST /api/adhere` |
 | `timer(task, start \| stop)` | Starts or stops a task timer (TASKS-2) | `POST /api/timer` |
-| `create_item(type, title, fields, parent?)` | A new item, under the type's form rules, optionally under a parent (GEN-6, GEN-7) | `POST /api/subjects` |
-| `relate(from, to, kind)`, `tag(item, tags)` | Relations and tags | `POST /api/relate`, `/api/link`, `/api/tag` |
 | `log_meal(...)` | A Food Log entry (FOOD-1), only if `food` is exposed | `POST /api/food/meals` |
+
+Every item tool names items by id or URN, never by title, so a write can't land on an item that
+only shares a name, and an item of a switched-off area isn't found. Two kinds of item stay
+Chris's: a repeating Task's series (whether it repeats, its dates and its pattern; a repetition
+is the agent's like any Task) and a Review, which he completes and `link_reflection` links.
 
 **Never offered** (no tool exists at any level):
 - archive or restore;
@@ -1051,7 +1064,9 @@ dictation from the Reviews page answers.
 - rewards: redeem, price, target, bounty (coins are real money);
 - exception days and settle jobs;
 - Oura connect, disconnect or sync;
-- covers.
+- covers;
+- a repeating Task's pattern, and stopping or restarting its series (2026-11-18);
+- assigning an item to a Person, which comes with Phase 3's step 3.2.
 
 Every tool calls the same Application service its `/api` endpoint calls, never SQL, so
 every rule and invariant holds. `/mcp`, like the API and `bsk`, is a door into the
@@ -1076,12 +1091,21 @@ reflection link also has `agent_person_id` in its payload: the Person the client
 the client and `bsk_ops.agent_client` its Person (a replaced client keeps its own link). The
 web's "via Claude" isn't built yet.
 
+The item tools (step 2.3) write the same way: a status change, its ledger entries, a rename or
+field change (an `attribute_change`, from and to) and a new item's first status all carry the
+agent's source. A tag and a link aren't events, Chris's own included: they're rows in
+`bsk.item_tag` and `bsk.subject_relation` with no source, and removing one deletes its row (an
+alignment edge is structure, not history, `RelationService.UnlinkAsync`). So for those the
+access log (§4.5) is the record of which agent did it, kept 90 days.
+
 ### 5.4 Safety details
 
-- **Annotations.** Write tools are `readOnlyHint: false`. `capture`,
-  `add_journal_entry` and `create_item` are `destructiveHint: false`, since they only add.
-  `set_status` is `idempotentHint: true`. Clients like Claude ask Chris before using a tool
-  that isn't read-only, unless he has allowed it.
+- **Annotations.** Write tools are `readOnlyHint: false`. The ones that only add (`capture`,
+  `add_journal_entry`, `dismiss`, `link_reflection`, `create_item`) are `destructiveHint: false`;
+  the ones that change what's there (`set_status`, `update_item`, `tag`, `link`) are
+  `destructiveHint: true` and `idempotentHint: true`, since saying the same thing again changes
+  nothing. Clients like Claude ask Chris before using a tool that isn't read-only, unless he has
+  allowed it.
 - **Retries.** Each write tool that adds something takes an optional `request_id`, and the server
   instructions tell agents to send a new UUID for each write they intend. The id becomes
   the event's `external_id` under `mcp:<client_id>`, so a retried call writes once
@@ -1108,8 +1132,10 @@ web's "via Claude" isn't built yet.
   and makes nothing more; an Idea is flagged for the Inbox once. A type with no status (Person,
   Area, ...) can't carry an id, and a Problem needs none, being unique by title
   (`RequestRetryTests`).
-- **Undo** works the kernel's normal way: set a status back, or dismiss a capture in
-  triage. Nothing an agent can do deletes anything.
+- **Undo** works the kernel's normal way: set a status back, rename or set a field back (its
+  `attribute_change` holds what it was), or dismiss a capture in triage. Nothing an agent can do
+  deletes an item, an event or a text; removing a tag or a link deletes that row, as Chris's own
+  removal does (§5.3).
 - **Records.** The access log records writes like reads, and the event store keeps them
   for good.
 
@@ -1128,6 +1154,18 @@ Tests show (all done for `capture`, 2026-11-12, in `McpWriteTests`):
   for the same link again, never completes the review, and refuses a bad path, a future review
   or an item that isn't a Review without writing anything.
 
+For `full` (done 2026-11-18, in `McpItemWriteTests`, and the levels in `McpWriteTests`):
+- A `capture` agent isn't listed the item tools, and a call to one is refused for its level.
+- Each tool's refusals are in words: a status outside the type's, a field its type doesn't have,
+  a day that isn't `yyyy-MM-dd`, a link the kernel refuses, a title already taken (saying which
+  fields were set before it).
+- An item named by title, or of a switched-off area, isn't found; a repeating Task's series and
+  a Review are refused.
+- Status changes, field changes and a new item's first status carry the agent's source; each
+  field change is an `attribute_change` from and to, and the answer says each change.
+- Saying a status, field, tag or link again writes nothing; a retried `create_item` makes one item.
+- Completing pays as Chris's own does, and says so only while the rewards area is on.
+
 On staging (not yet): Chris captures to his Inbox by voice through Claude on his phone
 (CAP-3's first step) and triages it in LifeOS, and the vault's nightly sweep dismisses the
 captures it files.
@@ -1144,7 +1182,7 @@ writing agent got the same level.
 |---|---|---|
 | 2.1 | The `capture` level (above) | Done 2026-11-12, on for staging since 2026-11-13 |
 | 2.2 | Groundwork: `full` accepted; a level for each client (decision 7), listed and refused by level; Connected agents shows each agent's level; a status set to what it already is writes nothing; a create can carry a request id | Done 2026-11-18. Tests: a capture-level agent is listed and may call only the capture tools; a retried create makes one item; setting a status again writes nothing and pays nothing more |
-| 2.3 | Item tools at `full`: `set_status`, `update_item`, `create_item`, `tag`, `link`; the server instructions and the guide say what they do | Each tool's tests: refusals in words, items of a switched-off area refused, events carry the agent's source, history shows what changed from and to |
+| 2.3 | Item tools at `full`: `set_status`, `update_item`, `create_item`, `tag`, `link`; the server instructions and the guide say what they do | Done 2026-11-18. Each tool's tests: refusals in words, items of a switched-off area refused, events carry the agent's source, the log holds what changed from and to (the web's history shows it with 2.4) |
 | 2.4 | "via Claude" in the web: status history, journal entries, the Inbox and field changes show the agent's Person | Web unit, golden and a11y tests. Lands before 2.5 |
 | 2.5 | `full` on staging for Chris's chats, the sweep on its own connection at `capture` | A week of use; findings recorded here |
 | 2.6 | Records at `full`: `check_off_habit`, `timer`, `log_meal` (only with `food` on) | After a week of 2.3 |

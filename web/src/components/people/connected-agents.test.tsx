@@ -240,7 +240,11 @@ describe("ConnectedAgents", () => {
     };
     renderSection();
     expect(await screen.findByText(/each at the level Mcp:WriteClients names it at/)).toBeInTheDocument();
-    expect(within(card("Claude")).getByText(/as Claude agent \(full level\)\./)).toBeInTheDocument();
+    expect(
+      within(card("Claude")).getByText(
+        /It can read LifeOS and capture to the Inbox and the journal, and change and add items as Claude agent \(full level\)\./,
+      ),
+    ).toBeInTheDocument();
   });
 
   it("says why an allowed agent only reads while writes are on", async () => {

@@ -166,7 +166,10 @@ public static class McpHost
                 sp.GetRequiredService<IClock>(),
                 sp.GetRequiredService<SubjectReader>(),
                 options));
+            services.AddSingleton(sp => new AgentItemWrites(
+                sp.GetRequiredService<SourceKernels>(), sp.GetRequiredService<SubjectReader>(), options));
             server.WithTools<CaptureTools>();
+            server.WithTools<ItemWriteTools>();
         }
 
         // Protected resource metadata (RFC 9728) at /.well-known/oauth-protected-resource/mcp,
