@@ -658,3 +658,4 @@ built.
   CR137 (CR55's lint rule covers every feature's `writes.ts`, from P3). The photo compare dialog
   (Screens #9) was tried and put back: `FormDialog`'s guard takes its `aria-pressed` pickers for
   edits. The review's "Not fixed tonight" says why each of the rest waits.
+- **2026-11-18** at 2867e33: 6.6 (0.0; 6.56 from 6.60). [Review](../agents/quality-reviews/2026-11-18.md).
