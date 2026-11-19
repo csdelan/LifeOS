@@ -93,8 +93,9 @@ public static class ApiHost
         // Fail closed: missing issuer/audience/JWKS-or-secret/ALLOWED_EMAILS throws.
         builder.Services.AddLifeOsAuth(builder.Configuration);
 
-        // The read-only MCP server for Chris's agents (agent-access plan §4), off unless
-        // Mcp:Enabled is true. Its tools read on the reader connection only.
+        // The MCP server for Chris's agents (agent-access plan §4), off unless Mcp:Enabled is
+        // true. Its read tools read on the reader connection only; its write tools, listed only
+        // when Mcp:Writes allows them, write through the kernel's services (§5).
         builder.AddLifeOsMcp();
 
         builder.Services.Configure<ForwardedHeadersOptions>(options =>

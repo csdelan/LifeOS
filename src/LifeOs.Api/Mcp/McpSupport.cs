@@ -20,7 +20,7 @@ public readonly record struct McpStamp(DateTimeOffset AsOf, DateOnly Today);
 /// <summary>
 /// Everything the tools read through besides the API's own readers, all on the
 /// <c>bsk_reader</c> connection: the read tools can't write (agent-access plan §4.1), and the
-/// write tools write only through <see cref="AgentWrites"/> (§5). The kernel's own
+/// write tools write only through <see cref="AgentWrites"/> and <see cref="AgentItemWrites"/> (§5). The kernel's own
 /// <see cref="DiagnosticRunner"/> runs as the owner, so the tools get their own.
 /// </summary>
 public sealed class McpReads(
