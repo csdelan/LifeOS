@@ -28,9 +28,10 @@ public sealed record McpAgent(string ClientId, Guid PersonId, string PersonName,
 
 /// <summary>
 /// Who may write through <c>/mcp</c>, and with which tools (agent-access plan §5.1): writes are
-/// on, the client is named in <c>Mcp:WriteClients</c>, it's on LifeOS's list, and it acts as an
-/// AI-agent Person in use. It's listed, and may call, the write tools of its level and the levels
-/// below. Anyone else doesn't see the write tools, and a call to one is refused.
+/// on, the client is on LifeOS's list, it's given a write level (on Connected agents, or else in
+/// <c>Mcp:WriteClients</c>), and it acts as an AI-agent Person in use. It's listed, and may call,
+/// the write tools of its level, held to <c>Mcp:Writes</c>, and the levels below. Anyone else
+/// doesn't see the write tools, and a call to one is refused.
 /// </summary>
 public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http, AgentAccessStore? access)
 {
@@ -66,13 +67,13 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
         => !ToolLevels.TryGetValue(tool, out var needed) || McpWrites.Reaches(agent.Level, needed);
 
     public const string Refusal =
-        "This agent can't write to LifeOS. Chris allows an agent to write in LifeOS's settings: it's named in "
-        + "Mcp:WriteClients and acts as an AI-agent Person on the Connected agents page.";
+        "This agent can't write to LifeOS. Chris lets an agent write on LifeOS's Connected agents page: "
+        + "he gives it a write level, and it acts as an AI-agent Person.";
 
     /// <summary>Why <paramref name="agent"/> can't call <paramref name="tool"/>, a tool above its level.</summary>
     public static string LevelRefusal(McpAgent agent, string tool)
         => $"This agent writes to LifeOS at the {agent.Level} level, and {tool} needs {ToolLevels[tool]}. "
-            + "Chris sets each agent's level in Mcp:WriteClients.";
+            + "Chris sets each agent's level on LifeOS's Connected agents page.";
 
     /// <summary>The agent <paramref name="user"/> signed in as, when it may write; null otherwise.</summary>
     public async Task<McpAgent?> WriterAsync(ClaimsPrincipal? user, CancellationToken cancellationToken)
@@ -90,9 +91,9 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
             return new McpWriteCheck(null, "the token names no agent client");
         }
 
-        if (SettingsRefuse(options, clientId) is { } why)
+        if (!options.WritesOn)
         {
-            return new McpWriteCheck(null, why);
+            return new McpWriteCheck(null, WritesOff);
         }
 
         if (access is null)
@@ -100,10 +101,20 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
             return new McpWriteCheck(null, "this host has no list of allowed agents");
         }
 
-        var person = await access.WriterAsync(clientId, cancellationToken);
-        return person is null
-            ? new McpWriteCheck(null, NoPerson)
-            : new McpWriteCheck(new McpAgent(clientId, person.Id, person.Name, options.WriteLevel(clientId)!), null);
+        var writer = await access.WriterAsync(clientId, cancellationToken);
+        if (writer is null)
+        {
+            return new McpWriteCheck(null, NotAllowed);
+        }
+
+        if (LevelRefuse(options, clientId, writer.StoredLevel) is { } why)
+        {
+            return new McpWriteCheck(null, why);
+        }
+
+        return writer.PersonId is { } personId
+            ? new McpWriteCheck(new McpAgent(clientId, personId, writer.PersonName ?? "", options.WriteLevel(clientId, writer.StoredLevel)!), null)
+            : new McpWriteCheck(null, NoPerson);
     }
 
     /// <summary>
@@ -112,19 +123,26 @@ public sealed class McpWriteAccess(McpOptions options, IHttpContextAccessor http
     /// a token (code review CR64), so the page and <c>/mcp</c> can't disagree about who writes.
     /// </summary>
     public static string? ReadOnlyBecause(McpOptions options, AgentClient agent)
-        => !agent.Allowed ? "LifeOS doesn't allow it"
-            : SettingsRefuse(options, agent.ClientId) ?? (agent.ActsAsAgentPerson ? null : NoPerson);
+        => !agent.Allowed ? NotAllowed
+            : !options.WritesOn ? WritesOff
+            : LevelRefuse(options, agent.ClientId, agent.StoredLevel) ?? (agent.ActsAsAgentPerson ? null : NoPerson);
 
     /// <summary>The level <paramref name="agent"/> writes at, as the Connected agents page shows it; null when it can't write.</summary>
     public static string? LevelOf(McpOptions options, AgentClient agent)
-        => ReadOnlyBecause(options, agent) is null ? options.WriteLevel(agent.ClientId) : null;
+        => ReadOnlyBecause(options, agent) is null ? options.WriteLevel(agent.ClientId, agent.StoredLevel) : null;
 
     private const string NoPerson = "it acts as no AI-agent Person in use (Connected agents)";
+    private const string NotAllowed = "LifeOS doesn't allow it";
+    private static readonly string WritesOff = $"{McpOptions.WritesKey} is off";
 
-    private static string? SettingsRefuse(McpOptions options, string clientId)
-        => !options.WritesOn ? $"{McpOptions.WritesKey} is off"
-            : !options.NamesWriter(clientId) ? $"{McpOptions.WriteClientsKey} doesn't name it"
-            : null;
+    /// <summary>Why a client given <paramref name="stored"/> (or its setting) can't write, or null when its level lets it.</summary>
+    private static string? LevelRefuse(McpOptions options, string clientId, string? stored)
+        => options.GivenLevel(clientId, stored) switch
+        {
+            null => "it has no write level (Connected agents)",
+            McpWrites.Off => "its write level is read only (Connected agents)",
+            _ => null,
+        };
 
     /// <summary>The agent making this call, or a refusal it can read.</summary>
     public async Task<McpAgent> CurrentAsync(CancellationToken cancellationToken)

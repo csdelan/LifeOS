@@ -8,7 +8,8 @@ namespace LifeOs.Api.Http;
 /// called. Only his Google web session reaches these (<c>AllowlistedUser</c>); an agent's token is
 /// 403, so no agent can allow itself or another, or read the log. The consent page allows an agent
 /// here before it approves the request at Supabase, and replaces the client an agent used before it
-/// connected again, carrying its Person over.
+/// connected again, carrying its Person and its write level over. Chris gives each agent its level
+/// here too (migration 0076), which <c>Mcp:Writes</c> still holds it to.
 /// </summary>
 public static class AgentEndpoints
 {
@@ -37,6 +38,10 @@ public static class AgentEndpoints
             .Produces<AgentClient>()
             .Produces<ApiError>(StatusCodes.Status400BadRequest)
             .Produces<ApiError>(StatusCodes.Status404NotFound);
+        api.MapPut("/{clientId}/level", SetLevel).WithName("SetAgentLevel")
+            .Produces<AgentClient>()
+            .Produces<ApiError>(StatusCodes.Status400BadRequest)
+            .Produces<ApiError>(StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> List(
@@ -45,14 +50,41 @@ public static class AgentEndpoints
         var agents = await access.ListAsync(cancellationToken);
         foreach (var agent in agents)
         {
-            agent.ReadOnlyBecause = McpWriteAccess.ReadOnlyBecause(mcp, agent);
-            agent.MayWrite = agent.ReadOnlyBecause is null;
-            agent.WriteLevel = McpWriteAccess.LevelOf(mcp, agent);
+            Describe(mcp, agent);
         }
 
         // Writes and each agent's say come from the settings /mcp runs on, so the page can't call
         // agents read-only while they write (code review CR64).
         return Results.Ok(new AgentsRead { McpEnabled = mcp.Enabled, Writes = mcp.Writes, Agents = agents });
+    }
+
+    /// <summary>Fills in what <c>/mcp</c> lets <paramref name="agent"/> write, by the rule each call is checked against.</summary>
+    private static AgentClient Describe(McpOptions mcp, AgentClient agent)
+    {
+        agent.GivenLevel = agent.Name is null ? null : mcp.GivenLevel(agent.ClientId, agent.StoredLevel);
+        agent.ReadOnlyBecause = McpWriteAccess.ReadOnlyBecause(mcp, agent);
+        agent.MayWrite = agent.ReadOnlyBecause is null;
+        agent.WriteLevel = McpWriteAccess.LevelOf(mcp, agent);
+        return agent;
+    }
+
+    private static async Task<IResult> SetLevel(
+        string clientId, SetAgentLevelBody? body, AgentAccessStore access, McpOptions mcp, CancellationToken cancellationToken)
+    {
+        if (!AgentAccessStore.IsClientId(clientId))
+        {
+            return BadClientId(clientId);
+        }
+
+        var level = body?.Level?.Trim();
+        if (level is not null && !McpWrites.Levels.Contains(level, StringComparer.Ordinal))
+        {
+            return Results.BadRequest(new ApiError($"'{level}' isn't a write level. Use off, capture or full."));
+        }
+
+        return await access.SetLevelAsync(clientId, level, cancellationToken) is { } client
+            ? Results.Ok(Describe(mcp, client))
+            : NotAllowed(clientId);
     }
 
     private static async Task<IResult> Calls(
@@ -72,7 +104,7 @@ public static class AgentEndpoints
     }
 
     private static async Task<IResult> Allow(
-        string clientId, AllowAgentBody? body, AgentAccessStore access, CancellationToken cancellationToken)
+        string clientId, AllowAgentBody? body, AgentAccessStore access, McpOptions mcp, CancellationToken cancellationToken)
     {
         if (!AgentAccessStore.IsClientId(clientId))
         {
@@ -121,7 +153,10 @@ public static class AgentEndpoints
 
         try
         {
-            return Results.Ok(await access.AllowAsync(clientId, name, uri, redirect, replaces, cancellationToken));
+            // A replacing client takes the level Mcp:WriteClients gave the one it replaces, when that
+            // one has none of its own stored (migration 0076).
+            return Results.Ok(Describe(mcp, await access.AllowAsync(
+                clientId, name, uri, redirect, replaces, cancellationToken, settingsLevels: mcp.WriteClients)));
         }
         catch (ArgumentException e)
         {
@@ -211,4 +246,14 @@ public sealed class AllowAgentBody
 public sealed class LinkAgentPersonBody
 {
     public Guid? PersonId { get; set; }
+}
+
+/// <summary>
+/// <c>PUT /api/agents/{clientId}/level</c>: the level Chris gives an agent (migration 0076),
+/// <c>off</c> (it only reads), <c>capture</c> or <c>full</c>, or null to leave it to
+/// <c>Mcp:WriteClients</c>. <c>Mcp:Writes</c> still holds every agent to its level.
+/// </summary>
+public sealed class SetAgentLevelBody
+{
+    public string? Level { get; set; }
 }

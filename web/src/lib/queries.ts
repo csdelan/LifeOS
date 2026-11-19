@@ -356,11 +356,12 @@ export type AgentAction =
   | { kind: "allow"; clientId: string; name: string; uri: string | null }
   | { kind: "revoke"; clientId: string; removeGrant: boolean }
   | { kind: "remove-grant"; clientId: string }
-  | { kind: "link"; clientId: string; personId: string | null };
+  | { kind: "link"; clientId: string; personId: string | null }
+  | { kind: "level"; clientId: string; level: string | null };
 
 /**
- * Allow, revoke, remove or link an agent. Revoking takes it off LifeOS's list first, so `/mcp`
- * refuses its next call even if Supabase then fails to remove its grant.
+ * Allow, revoke, remove or link an agent, or give it its write level. Revoking takes it off
+ * LifeOS's list first, so `/mcp` refuses its next call even if Supabase then fails to remove its grant.
  */
 export function useAgentAction() {
   const qc = useQueryClient();
@@ -388,6 +389,9 @@ export function useAgentAction() {
           return;
         case "link":
           await agents.linkPerson(action.clientId, action.personId);
+          return;
+        case "level":
+          await agents.setLevel(action.clientId, action.level);
           return;
       }
     },

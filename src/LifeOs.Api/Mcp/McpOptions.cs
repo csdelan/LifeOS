@@ -38,9 +38,10 @@ public sealed class McpOptions
     public string Writes { get; init; } = McpWrites.Off;
 
     /// <summary>
-    /// The clients that may write when writes are on, each with the level it's named at
-    /// (<c>&lt;id&gt;:full</c>; a bare id is <c>capture</c>). A client must also be on LifeOS's list
-    /// and act as an AI-agent Person (§5.1); every other client stays read-only.
+    /// The level each client was given in the settings (<c>&lt;id&gt;:full</c>; a bare id is
+    /// <c>capture</c>), for a client with no level of its own on Connected agents (migration 0076).
+    /// A client must also be on LifeOS's list and act as an AI-agent Person (§5.1); every other
+    /// client stays read-only.
     /// </summary>
     public IReadOnlyDictionary<string, string> WriteClients { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -53,9 +54,24 @@ public sealed class McpOptions
     /// The level <paramref name="clientId"/> writes at, by the settings alone: the level it's named
     /// at, held to <see cref="Writes"/>; null when writes are off or it isn't named.
     /// </summary>
-    public string? WriteLevel(string clientId)
-        => WritesOn && WriteClients.TryGetValue(clientId.Trim(), out var named)
-            ? McpWrites.Lower(named, Writes)
+    public string? WriteLevel(string clientId) => WriteLevel(clientId, stored: null);
+
+    /// <summary>
+    /// The level <paramref name="clientId"/> is given, before <see cref="Writes"/> holds it: the
+    /// level stored for it on Connected agents (<paramref name="stored"/>), or else the one
+    /// <c>Mcp:WriteClients</c> names it at. Null when neither gives it one.
+    /// </summary>
+    public string? GivenLevel(string clientId, string? stored)
+        => stored ?? (WriteClients.TryGetValue(clientId.Trim(), out var named) ? named : null);
+
+    /// <summary>
+    /// The level <paramref name="clientId"/> writes at: the level it's given
+    /// (<see cref="GivenLevel"/>), held to <see cref="Writes"/>. Null when writes are off, or it's
+    /// given no level or <c>off</c>.
+    /// </summary>
+    public string? WriteLevel(string clientId, string? stored)
+        => WritesOn && GivenLevel(clientId, stored) is { } given && given != McpWrites.Off
+            ? McpWrites.Lower(given, Writes)
             : null;
 
     public bool Allows(string domain) => Domains.Contains(domain);
@@ -186,7 +202,8 @@ public sealed class McpOptions
 
 /// <summary>
 /// The write levels (agent-access plan §5.1), lowest first: <c>Mcp:Writes</c>'s ceiling, and each
-/// client's own level in <c>Mcp:WriteClients</c>. A level includes every tool of the levels below it.
+/// client's own level, given on Connected agents or in <c>Mcp:WriteClients</c>. A level includes
+/// every tool of the levels below it.
 /// </summary>
 public static class McpWrites
 {

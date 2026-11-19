@@ -6279,6 +6279,72 @@
           }
         }
       }
+    },
+    "/api/agents/{clientId}/level": {
+      "put": {
+        "tags": [
+          "Agents"
+        ],
+        "operationId": "SetAgentLevel",
+        "parameters": [
+          {
+            "name": "clientId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/SetAgentLevelBody"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentClient"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7115,6 +7181,12 @@
             "type": "boolean"
           },
           "readOnlyBecause": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "givenLevel": {
             "type": [
               "null",
               "string"
@@ -12709,6 +12781,17 @@
           },
           "archived": {
             "type": "boolean"
+          }
+        }
+      },
+      "SetAgentLevelBody": {
+        "type": "object",
+        "properties": {
+          "level": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },

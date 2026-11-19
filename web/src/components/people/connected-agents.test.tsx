@@ -239,7 +239,7 @@ describe("ConnectedAgents", () => {
       personName: "Claude agent",
     };
     renderSection();
-    expect(await screen.findByText(/each at the level Mcp:WriteClients names it at/)).toBeInTheDocument();
+    expect(await screen.findByText(/Each writes at the level you give it here/)).toBeInTheDocument();
     expect(
       within(card("Claude")).getByText(
         /It can read LifeOS and capture to the Inbox and the journal, and change and add items as Claude agent \(full level\)\./,
@@ -249,12 +249,36 @@ describe("ConnectedAgents", () => {
 
   it("says why an allowed agent only reads while writes are on", async () => {
     overrides.writes = "capture";
-    overrides.claude = { mayWrite: false, readOnlyBecause: "Mcp:WriteClients doesn't name it" };
+    overrides.claude = { mayWrite: false, readOnlyBecause: "it has no write level (Connected agents)" };
     renderSection();
     expect(
       await within(await screen.findByRole("article", { name: "Claude" })).findByText(
-        /It can read LifeOS, but not write: Mcp:WriteClients doesn't name it\./,
+        /It can read LifeOS, but not write: it has no write level \(Connected agents\)\./,
       ),
+    ).toBeInTheDocument();
+  });
+
+  // Migration 0076: Chris gives each agent its level here, and connecting again keeps it.
+  it("gives an agent a write level, and says what it may do once it acts as an AI Person", async () => {
+    overrides.writes = "full";
+    const user = userEvent.setup();
+    renderSection();
+    const claude = await screen.findByRole("article", { name: "Claude" });
+    // The server log names an agent by its client id, so the card shows it.
+    expect(within(claude).getByText("mock-claude")).toBeInTheDocument();
+    const level = within(claude).getByRole("combobox", { name: "Write level of Claude" });
+    expect(level).toHaveTextContent("Read only");
+
+    await user.click(level);
+    await user.click(await screen.findByRole("option", { name: "Full" }));
+    await waitFor(() => expect(level).toHaveTextContent("Full"));
+    expect(within(claude).getByText(/but not write: it acts as no AI-agent Person in use/)).toBeInTheDocument();
+
+    await user.click(within(claude).getByRole("combobox", { name: "Person Claude acts as" }));
+    const person = await screen.findAllByRole("option");
+    await user.click(person[1]);
+    expect(
+      await within(claude).findByText(/It can read LifeOS and capture to the Inbox and the journal, and change and add items as .+ \(full level\)\./),
     ).toBeInTheDocument();
   });
 

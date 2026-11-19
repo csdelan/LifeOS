@@ -115,9 +115,9 @@ change later without redoing the design.
    - The agent is linked to an AI-agent Person (GEN-15), so the web can show "via Claude".
    - `derived` is kept for an agent's own inferences. Those must cite their source events
      (invariant 2), and Phase 2 doesn't include them.
-5. **A write needs two things: the switch, and the agent on a list.** `Mcp__Writes` turns
-   writes on, and `Mcp__WriteClients` names the agents that may use them. Every other
-   agent stays read-only.
+5. **A write needs two things: the switch, and the agent given a level.** `Mcp__Writes` turns
+   writes on, and each agent writes only at the level Chris gives it (decision 7, on Connected
+   agents since 2026-11-19). Every other agent stays read-only.
 6. **An agent's status change pays as Chris's does** (decided 2026-11-18, for the `full`
    level). Completing a Task through an agent pays its bounty, as Completed does from the web:
    it's Chris's word through the agent (decision 4), moving it off Completed takes the pay back,
@@ -131,6 +131,14 @@ change later without redoing the design.
    watching and reads dictated text, so it gets a connection of its own at `capture`, while the
    chats Chris watches get `full`. Weighed and not chosen: one level for every agent, with only
    the sweep's prompt holding it back.
+   **Amended 2026-11-19**, when Chris asked not to have to reconnect so often: the level is kept
+   in LifeOS beside the Person (migration 0076), and Chris gives it on Connected agents (Read
+   only, Capture or Full). Connecting again registers a new client, and the consent page's
+   Replace carries the level to it with the Person, so an agent's writes no longer stop until a
+   setting names the new id and the machine restarts. `Mcp__WriteClients` stays, as the level for
+   a client with none stored; a level given on the page wins. `Mcp__Writes` stays a setting and
+   the ceiling, so no page turns writes on (§4.2). Weighed and not chosen: naming each new client
+   in the setting after every reconnect.
 
 ## 3. Phase 0: backups
 
@@ -441,13 +449,15 @@ only the allow list and the access log touch the owner connection, and they writ
 | `Mcp__Domains` | `health,food,rewards,home` | The optional areas exposed besides the core (§4.3) |
 | `Mcp__BlockedClients` | empty | Client ids refused immediately, even with a token that hasn't expired |
 | `Mcp__Writes` | `off` | `off`, `capture` or `full` (Phase 2, §5.1): the highest level any agent writes at |
-| `Mcp__WriteClients` | empty | The client ids that may write when writes are on, comma-separated, each at its own level: `<id>:full`, or the id alone for `capture` (§5.1) |
+| `Mcp__WriteClients` | empty | The level of a client with none given on Connected agents, comma-separated: `<id>:full`, or the id alone for `capture` (§5.1) |
 
 - An unknown value fails startup, like the other settings.
 - To change one: `fly secrets set <key>=<value> -a <app>`. The machine restarts with the
   new value; nothing is redeployed.
 - They're settings, not a toggle on a page, on purpose: neither an agent nor a stolen
-  browser session can turn writes on.
+  browser session can turn writes on. Each agent's own level is given on Connected agents
+  (decision 7, as amended), under `Mcp__Writes`: no agent's token reaches that page's endpoints,
+  and a stolen browser session could write through the web anyway.
 
 ### 4.3 Tools
 
@@ -998,20 +1008,27 @@ the vault, in `99 System/tools/nightly-sweep-task.md`. Found on the way:
   a second LifeOS connector, which Chris removed.
 - Each reconnect registers a new client, which `Mcp__WriteClients` must name again. Connected
   agents shows a client's website rather than its id, so the ids came from `fly logs`.
+  Fixed the same day (migration 0076, decision 7 as amended): Connected agents keeps each
+  agent's write level and carries it to the new client when the agent connects again, as it does
+  the Person, and shows each client's id under its website.
 
 ### 5.1 The switch
 
 `Mcp__Writes` has three levels: `off` (the default), `capture` and `full`. A write tool is
 listed and works only when both hold:
-- the calling client is in `Mcp__WriteClients`, at a level that includes the tool;
+- the calling client's write level includes the tool;
 - the client is linked to an AI-agent Person (§4.5).
 
-Each client in `Mcp__WriteClients` has a level of its own (decision 7): `<id>:full`, or the id
-alone for `capture`. `Mcp__Writes` is the ceiling: a client named at `full` writes at `capture`
-while `Mcp__Writes` is `capture`, and nothing writes while it's `off`. So raising the ceiling
-widens no client that wasn't named higher. A level that isn't `capture` or `full`, an entry
-with no id, or an id named twice fails startup. `McpWriteAccess.ToolLevels` gives each write
-tool the level it needs.
+Each client has a write level of its own (decision 7). Chris gives it on Connected agents: Read
+only (`off`), Capture or Full, kept in `bsk_ops.agent_client.write_level` (migration 0076,
+`PUT /api/agents/{clientId}/level`). When the agent connects again, the consent page's Replace
+carries it to the new client with the Person, from the most recently allowed client replaced.
+A client with no level stored takes the one `Mcp__WriteClients` names: `<id>:full`, or the id
+alone for `capture`; a level stored wins, Read only included. `Mcp__Writes` is the ceiling: a
+client given `full` writes at `capture` while `Mcp__Writes` is `capture`, and nothing writes
+while it's `off`. So raising the ceiling widens no client that wasn't given more. In
+`Mcp__WriteClients`, a level that isn't `capture` or `full`, an entry with no id, or an id named
+twice fails startup. `McpWriteAccess.ToolLevels` gives each write tool the level it needs.
 
 Otherwise the tool isn't even listed, so agents don't see it, and it's refused if called
 anyway. The server's call filter refuses it, for every tool in `McpWriteAccess.Tools`, before
@@ -1022,17 +1039,17 @@ CR29). A tool above the client's level is refused in words that name both levels
 fly secrets set Mcp__Writes=capture Mcp__WriteClients=<client id> -a lifeos-mz55-staging
 ```
 
-and, for step 2.5, Chris's chats at `full` with the sweep's own client at `capture`:
+and, for step 2.5, Chris's chats at `full` with the sweep's own client at `capture`, set this
+way before levels were kept in LifeOS:
 
 ```bash
 fly secrets set Mcp__Writes=full Mcp__WriteClients=<chat client id>:full,<sweep client id> -a lifeos-mz55-staging
 ```
 
-Setting it back to `off` the same way turns writes off again. Connected agents shows a
-client's id only when it has no website, so take the id from the log line below, which each
-client writes as it lists its tools. Claude registers a new one each time it connects again, so
-the new one must be named too. The allow list and the Person link are read on every call, so revoking
-the client or unlinking its Person stops its writes at once.
+Setting `Mcp__Writes` back to `off` the same way turns writes off again. Connected agents shows
+each client's id under its website, the id the log line below names it by. The allow list, the
+level and the Person link are read on every call, so revoking the client, setting it to Read only
+or unlinking its Person stops its writes at once.
 
 An agent can't tell why it has no write tools, so each time a client lists tools with writes on,
 the server logs which: `MCP write tools listed for <client id> at <level>`, or `MCP write tools
@@ -1186,8 +1203,8 @@ access log (§4.5) is the record of which agent did it, kept 90 days.
 Tests show (all done for `capture`, 2026-11-12, in `McpWriteTests`):
 - With writes off, no write tool is listed, and a call to one is refused.
 - At `capture`, only the capture tools are listed.
-- A client that isn't in `Mcp__WriteClients` stays read-only, and so does one named there
-  that acts as no AI-agent Person.
+- A client with no write level stays read-only, and so does one given a level that acts as no
+  AI-agent Person.
 - Events carry the source and provenance from §5.3.
 - A retried `request_id` writes once.
 - An agent token still can't reach `/api/*`.
@@ -1207,6 +1224,14 @@ For `full` (done 2026-11-18, in `McpItemWriteTests`, and the levels in `McpWrite
   field change is an `attribute_change` from and to, and the answer says each change.
 - Saying a status, field, tag or link again writes nothing; a retried `create_item` makes one item.
 - Completing pays as Chris's own does, and says so only while the rewards area is on.
+
+For levels kept in LifeOS (done 2026-11-19, in `AgentWriteLevelTests`):
+- A level given on Connected agents lets an agent write with no setting naming it; Read only
+  takes the writes away on its next call, and clearing it falls back to `Mcp__WriteClients`.
+- A level given wins over the setting, and `Mcp__Writes` still holds it.
+- Connecting again carries the level, from the setting or given, to the client that replaces;
+  a client that replaces none starts with no level.
+- Setting a level refuses an unknown level, an unknown client and an agent's token.
 
 On staging (not yet): Chris captures to his Inbox by voice through Claude on his phone
 (CAP-3's first step) and triages it in LifeOS, and the vault's nightly sweep dismisses the

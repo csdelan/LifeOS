@@ -92,7 +92,7 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.Equal(0, await AgentEventsAsync(db));
         // An agent can't tell why it has no write tools, so the server logs it.
         var hidden = log.Messages("LifeOs.Api.Mcp").Where(m => m.StartsWith("MCP write tools", StringComparison.Ordinal)).ToList();
-        Assert.Contains($"MCP write tools hidden from {Other}: Mcp:WriteClients doesn't name it", hidden);
+        Assert.Contains($"MCP write tools hidden from {Other}: it has no write level (Connected agents)", hidden);
         Assert.Contains($"MCP write tools hidden from {Writer}: it acts as no AI-agent Person in use (Connected agents)", hidden);
         Assert.DoesNotContain(hidden, m => m.Contains("listed", StringComparison.Ordinal));
     }
@@ -116,7 +116,9 @@ public sealed class McpWriteTests(PostgresFixture postgres)
         Assert.Equal(McpWrites.Capture, writer.WriteLevel);
         var other = Assert.Single(read.Agents, a => a.ClientId == Other);
         Assert.False(other.MayWrite);
-        Assert.Equal("Mcp:WriteClients doesn't name it", other.ReadOnlyBecause);
+        Assert.Equal("it has no write level (Connected agents)", other.ReadOnlyBecause);
+        Assert.Equal(McpWrites.Capture, writer.GivenLevel);
+        Assert.Null(other.GivenLevel);
         Assert.Null(other.WriteLevel);
         // /mcp lists the write tools to exactly the agents the page says may write.
         foreach (var agent in new[] { writer, other })

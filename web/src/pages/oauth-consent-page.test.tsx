@@ -99,6 +99,7 @@ function known(clientId: string, extra: Partial<AgentRecord> = {}): AgentRecord 
     actsAsAgentPerson: false,
     mayWrite: false,
     readOnlyBecause: null,
+    givenLevel: null,
     writeLevel: null,
     lastCallAt: null,
     callsThisWeek: 0,
@@ -168,7 +169,7 @@ describe("OAuthConsentPage", () => {
     expect(screen.getAllByText("claude.ai")).toHaveLength(2);
     expect(screen.getByText("Confirm who you are")).toBeInTheDocument();
     expect(screen.getByText("Your email address")).toBeInTheDocument();
-    expect(screen.getByText(/agents can only read/i)).toBeInTheDocument();
+    expect(screen.getByText(/only reads until you give it a write level on Connected agents/)).toBeInTheDocument();
     expect(client.lookup).toHaveBeenCalledWith("auth-1");
   });
 
@@ -212,6 +213,17 @@ describe("OAuthConsentPage", () => {
       expect(agents.removeGrant).toHaveBeenCalledWith("old-1");
       expect(agents.removeGrant).toHaveBeenCalledTimes(1);
       expect(agents.removeGrant.mock.invocationCallOrder[0]).toBeLessThan(client.approve.mock.invocationCallOrder[0]);
+    });
+
+    // Migration 0076: connecting again keeps the agent's write level, so its writes don't stop.
+    it("says the write level carries over too", async () => {
+      knowing(earlier, known("old-2", { givenLevel: "full", allowedAt: "2026-10-28T17:00:00Z" }));
+      renderPage();
+      expect(
+        await screen.findByText(
+          /This one acts as Claude too and keeps the full write level, and the earlier ones are revoked\./,
+        ),
+      ).toBeInTheDocument();
     });
 
     it("keeps both when unticked", async () => {

@@ -1,4 +1,4 @@
--- The LifeOS schema as migrations 0001 to 0075 leave it. GENERATED: don't edit it.
+-- The LifeOS schema as migrations 0001 to 0076 leave it. GENERATED: don't edit it.
 -- Change the schema with a new migration in db/migrations, then run
 -- ./scripts/update-schema.ps1 to regenerate this file. CI fails while it is stale.
 --
@@ -186,12 +186,14 @@ CREATE TABLE bsk_ops.agent_client (
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     redirect_uri text,
     replaced_by text,
+    write_level text,
     CONSTRAINT agent_client_client_id_check CHECK ((client_id ~ '^[A-Za-z0-9._:-]{1,200}$'::text)),
     CONSTRAINT agent_client_client_uri_check CHECK (((client_uri IS NULL) OR (length(client_uri) <= 500))),
     CONSTRAINT agent_client_name_check CHECK (((length(name) >= 1) AND (length(name) <= 200))),
     CONSTRAINT agent_client_pkey PRIMARY KEY (client_id),
     CONSTRAINT agent_client_redirect_uri_check CHECK (((redirect_uri IS NULL) OR ((length(redirect_uri) >= 1) AND (length(redirect_uri) <= 500)))),
-    CONSTRAINT agent_client_replaced_by_check CHECK (((replaced_by IS NULL) OR (replaced_by ~ '^[A-Za-z0-9._:-]{1,200}$'::text)))
+    CONSTRAINT agent_client_replaced_by_check CHECK (((replaced_by IS NULL) OR (replaced_by ~ '^[A-Za-z0-9._:-]{1,200}$'::text))),
+    CONSTRAINT agent_client_write_level_check CHECK (((write_level IS NULL) OR (write_level = ANY (ARRAY['off'::text, 'capture'::text, 'full'::text]))))
 );
 
 -- One row per connected outside service: its encrypted OAuth tokens, a connect in progress, and the last sync's outcome.

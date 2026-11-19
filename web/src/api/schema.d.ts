@@ -2164,6 +2164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents/{clientId}/level": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["SetAgentLevel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2391,6 +2407,7 @@ export interface components {
             actsAsAgentPerson: boolean;
             mayWrite: boolean;
             readOnlyBecause?: null | string;
+            givenLevel?: null | string;
             writeLevel?: null | string;
             /** Format: date-time */
             lastCallAt?: null | string;
@@ -3915,6 +3932,9 @@ export interface components {
             due: string;
             status?: null | string;
             archived: boolean;
+        };
+        SetAgentLevelBody: {
+            level?: null | string;
         };
         SetAttributesBody: {
             subject?: string;
@@ -8951,6 +8971,50 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": null | components["schemas"]["LinkAgentPersonBody"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClient"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    SetAgentLevel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": null | components["schemas"]["SetAgentLevelBody"];
             };
         };
         responses: {

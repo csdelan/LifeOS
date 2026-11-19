@@ -29,7 +29,7 @@ test.describe("golden paths: connected agents", () => {
     await expect(helper.getByText("Not allowed")).toBeVisible();
     await helper.getByRole("button", { name: "Allow" }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Allow" }).click();
-    await expect(helper.getByText("Connected")).toBeVisible();
+    await expect(helper.getByText("Connected", { exact: true })).toBeVisible();
 
     const claude = page.getByRole("article", { name: "Claude" });
     await claude.getByRole("button", { name: "Recent calls" }).click();

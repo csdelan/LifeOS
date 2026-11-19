@@ -26,9 +26,10 @@ LifeOS is Chris's personal life tracker, and his real life data lives in it.
 - `src/LifeOs.Api`: the ASP.NET Core API. It catches up repeating Tasks and the rewards as it
   starts (`StartupCatchUp`), so starting it against a database writes to it; `CatchUp:OnStart`
   false turns that off, and `ApiTestHost` does. It serves the SPA in production and `/mcp`, the
-  connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture` or `full`: then the
-  clients named in `Mcp:WriteClients`, each at its own level (`<id>:full`, or the id alone for
-  capture) up to that ceiling, can capture to the Inbox, journal, dismiss raw captures and link a
+  connector Chris's agents use. It reads only, unless `Mcp:Writes` is `capture` or `full`: then
+  each client at the level Chris gives it on Connected agents (`bsk_ops.agent_client.write_level`,
+  carried over when the agent connects again; `Mcp:WriteClients` for one with none) up to that
+  ceiling can capture to the Inbox, journal, dismiss raw captures and link a
   review to its vault reflection, and at full change items and make new ones, as `mcp:<client_id>`. A write tool goes in
   `McpWriteAccess.ToolLevels` at the level it needs (`docs/pilot/agent-access-plan.md` §5).
   Which agent wrote a row ("via Claude") is in `bsk_ops`, which the reader never reads, so a read

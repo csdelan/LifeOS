@@ -6,7 +6,7 @@ import { AuthChrome, AuthConfigError, AuthReachError, AuthSplash, Mark } from "@
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { carriedPerson, replaceable, type AgentRecord } from "@/lib/agents";
+import { carriedLevel, carriedPerson, levelName, replaceable, type AgentRecord } from "@/lib/agents";
 import { getAgentsClient, getConsentClient } from "@/lib/client";
 import { isLiveApi } from "@/lib/api-base";
 import { formatTimestamp } from "@/lib/dates";
@@ -277,7 +277,8 @@ function ConsentCard({
         <p className="mt-4 text-sm text-muted-foreground">
           {request.clientName} wants to read your LifeOS: your identity statements, goals, projects,
           tasks, habits, calendar, people, journal entries and notes, and the areas you&apos;ve
-          switched on for agents. Agents can only read; nothing they do changes LifeOS.
+          switched on for agents. An agent only reads until you give it a write level on Connected
+          agents.
         </p>
         <dl className="mt-5 space-y-3 text-sm">
           <Detail term="Signed in as">{request.email}</Detail>
@@ -346,7 +347,13 @@ function Replacing({
   const many = earlier.length > 1;
   const when = earlier.map((r) => (r.allowedAt ? formatTimestamp(r.allowedAt) : "before"));
   const carried = carriedPerson(earlier);
+  const level = carriedLevel(earlier);
   const revoked = many ? "the earlier ones are revoked" : "the earlier one is revoked";
+  // What this client takes over from the earlier one (migrations 0048 and 0076).
+  const keeps = [
+    carried ? `acts as ${carried.name} too` : null,
+    level ? `keeps the ${levelName(level)} write level` : null,
+  ].filter((part) => part !== null);
   return (
     <div className="mt-5 rounded-lg border border-border px-3 py-3 text-sm">
       <div className="flex items-start gap-3">
@@ -364,7 +371,9 @@ function Replacing({
           </Label>
           <p id="consent-replace-detail" className="mt-1 text-muted-foreground">
             {name} connected before ({when.join(", ")}).{" "}
-            {carried ? `This one acts as ${carried.name} too, and ${revoked}.` : `${revoked[0].toUpperCase()}${revoked.slice(1)}.`}{" "}
+            {keeps.length > 0
+              ? `This one ${keeps.join(" and ")}, and ${revoked}.`
+              : `${revoked[0].toUpperCase()}${revoked.slice(1)}.`}{" "}
             {many ? "Untick to keep them all." : "Untick to keep both."}
           </p>
         </div>

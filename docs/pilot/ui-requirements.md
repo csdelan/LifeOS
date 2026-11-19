@@ -4661,9 +4661,11 @@ from that; Chris to confirm.)*
   call. Each event an agent writes has source `mcp:<client_id>` and provenance `declared`
   (Chris said it, through that agent), and names the agent's Person; `derived` is kept for an
   agent's own inferences, which aren't offered (this settles CAP-3's open decision).
-- Kernel delta: `Mcp:Writes` (`off`, `capture`, `full`) and `Mcp:WriteClients`, which names
-  each writing client at its own level, `Mcp:Writes` being the ceiling (plan §2 decision 7); a
-  write needs both, and a client linked to an AI-agent Person. The `capture` level is built and on
+- Kernel delta: `Mcp:Writes` (`off`, `capture`, `full`), the ceiling, and each writing client's
+  own level, which Chris gives on Connected agents and which carries over when the agent connects
+  again, with `Mcp:WriteClients` naming a level for a client with none given (plan §2 decision 7,
+  amended 2026-11-19; migration 0076); a write needs both, and a client linked to an AI-agent
+  Person. The `capture` level is built and on
   for staging since 2026-11-12: `capture`, `add_journal_entry`, `dismiss` (raw captures only)
   and `link_reflection` (plan §5.2). `full` (status, check-offs, timers, create, relate, tag,
   meals) is built for items since 2026-11-18 (plan §5.6 step 2.3): `set_status`, `update_item`,

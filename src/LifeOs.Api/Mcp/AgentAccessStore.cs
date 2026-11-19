@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Dapper;
 using LifeOs.Api.Read;
@@ -53,23 +54,44 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
     }
 
     /// <summary>
-    /// The AI-agent Person an allowed client acts as, when it may write (agent-access plan §5.1):
-    /// on the list, not revoked, and linked to a Person whose kind is AI and that isn't archived.
-    /// Null otherwise. Read on every write, like the allow list, so an unlink takes effect at once.
+    /// What says whether an allowed client may write (agent-access plan §5.1): the level stored for
+    /// it on Connected agents, and the AI-agent Person it acts as, when that's a Person whose kind
+    /// is AI and that isn't archived. Null when it isn't on the list or is revoked. Read on every
+    /// call, like the allow list, so a change of level or an unlink takes effect at once.
     /// </summary>
-    public async Task<AgentPerson?> WriterAsync(string clientId, CancellationToken cancellationToken = default)
+    public async Task<AgentWriter?> WriterAsync(string clientId, CancellationToken cancellationToken = default)
     {
         await using var connection = await OpenAsync(cancellationToken);
-        return await connection.QueryFirstOrDefaultAsync<AgentPerson>(new CommandDefinition(
+        return await connection.QueryFirstOrDefaultAsync<AgentWriter>(new CommandDefinition(
             """
-            SELECT p.id, p.title AS name
+            SELECT c.write_level AS storedlevel, p.id AS personid, p.title AS personname
             FROM bsk_ops.agent_client c
-            JOIN bsk.v_subject p ON p.id = c.person_id AND p.type = 'Person' AND NOT p.archived
-                                AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai'
+            LEFT JOIN bsk.v_subject p ON p.id = c.person_id AND p.type = 'Person' AND NOT p.archived
+                                     AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai'
             WHERE c.client_id = @clientId AND c.revoked_at IS NULL;
             """,
             new { clientId },
             cancellationToken: cancellationToken));
+    }
+
+    /// <summary>
+    /// Gives a client its write level on Connected agents (migration 0076): <c>off</c> (it only
+    /// reads), <c>capture</c> or <c>full</c>, or null to leave it to <c>Mcp:WriteClients</c>.
+    /// <c>Mcp:Writes</c> still holds it. Null when the client was never allowed.
+    /// </summary>
+    public async Task<AgentClient?> SetLevelAsync(string clientId, string? level, CancellationToken cancellationToken = default)
+    {
+        if (level is not null && !McpWrites.Levels.Contains(level, StringComparer.Ordinal))
+        {
+            throw new ArgumentException($"'{level}' isn't a write level. Use off, capture or full.");
+        }
+
+        await using var connection = await OpenAsync(cancellationToken);
+        var changed = await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE bsk_ops.agent_client SET write_level = @level, updated_at = now() WHERE client_id = @clientId;",
+            new { clientId, level },
+            cancellationToken: cancellationToken));
+        return changed == 0 ? null : (await ListAsync(clientId, cancellationToken)).SingleOrDefault();
     }
 
     /// <summary>
@@ -96,15 +118,21 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
     /// registers a new client each time it connects again. Each must be on the list with the same
     /// name and return address, or nothing changes and an <see cref="ArgumentException"/> says
     /// why. The new client acts as the Person the most recently allowed of them acted as, when it
-    /// acts as no one yet and that Person is still an AI agent in use. They're revoked, with
-    /// <see cref="AgentClient.ReplacedBy"/> naming this one, and keep their own link, so what
-    /// they did stays theirs. All of it happens together or not at all.
+    /// acts as no one yet and that Person is still an AI agent in use. It also takes the write
+    /// level the most recently allowed of them with one was given (migration 0076), stored for it
+    /// or, from <paramref name="settingsLevels"/>, in <c>Mcp:WriteClients</c>, when it has no level
+    /// of its own yet. They're revoked, with <see cref="AgentClient.ReplacedBy"/> naming this one,
+    /// and keep their own link, so what they did stays theirs. All of it happens together or not
+    /// at all.
     /// </remarks>
     public async Task<AgentClient> AllowAsync(
         string clientId, string name, string? clientUri, string? redirectUri = null,
-        IReadOnlyCollection<string>? replaces = null, CancellationToken cancellationToken = default)
+        IReadOnlyCollection<string>? replaces = null, CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, string>? settingsLevels = null)
     {
         var replaced = replaces?.Distinct(StringComparer.Ordinal).ToArray() ?? [];
+        // The levels Mcp:WriteClients gives the replaced clients, for those with none stored.
+        var named = settingsLevels?.Where(l => replaced.Contains(l.Key, StringComparer.Ordinal)).ToList() ?? [];
         await using var connection = await OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         if (replaced.Length > 0)
@@ -173,11 +201,30 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
                 ) carried
                 WHERE n.client_id = @clientId AND n.person_id IS NULL;
 
+                UPDATE bsk_ops.agent_client n
+                SET write_level = carried.level, updated_at = now()
+                FROM (
+                    SELECT coalesce(a.write_level, named.level) AS level
+                    FROM bsk_ops.agent_client a
+                    LEFT JOIN unnest(@namedIds::text[], @namedLevels::text[]) AS named(client_id, level)
+                           ON named.client_id = a.client_id
+                    WHERE a.client_id = ANY(@replaced) AND coalesce(a.write_level, named.level) IS NOT NULL
+                    ORDER BY a.allowed_at DESC
+                    LIMIT 1
+                ) carried
+                WHERE n.client_id = @clientId AND n.write_level IS NULL;
+
                 UPDATE bsk_ops.agent_client
                 SET revoked_at = coalesce(revoked_at, now()), replaced_by = @clientId, updated_at = now()
                 WHERE client_id = ANY(@replaced);
                 """,
-                new { clientId, replaced },
+                new
+                {
+                    clientId,
+                    replaced,
+                    namedIds = named.Select(n => n.Key).ToArray(),
+                    namedLevels = named.Select(n => n.Value).ToArray(),
+                },
                 transaction,
                 cancellationToken: cancellationToken));
         }
@@ -351,11 +398,11 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
             ),
             clients AS (
                 SELECT c.client_id, c.name, c.client_uri, c.redirect_uri, c.allowed_at, c.revoked_at,
-                       c.replaced_by, c.person_id
+                       c.replaced_by, c.person_id, c.write_level
                 FROM bsk_ops.agent_client c
                 WHERE @clientId::text IS NULL OR c.client_id = @clientId
                 UNION ALL
-                SELECT k.client_id, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+                SELECT k.client_id, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
                 FROM calls k
                 WHERE k.last_refused_at IS NOT NULL
                   AND NOT EXISTS (SELECT 1 FROM bsk_ops.agent_client c WHERE c.client_id = k.client_id)
@@ -363,7 +410,7 @@ public sealed partial class AgentAccessStore(string ownerConnectionString, strin
             SELECT c.client_id AS clientid, c.name, c.client_uri AS clienturi, c.redirect_uri AS redirecturi,
                    c.allowed_at IS NOT NULL AND c.revoked_at IS NULL AS allowed,
                    c.allowed_at AS allowedat, c.revoked_at AS revokedat, c.replaced_by AS replacedby,
-                   c.person_id AS personid, p.title AS personname,
+                   c.person_id AS personid, p.title AS personname, c.write_level AS storedlevel,
                    coalesce(p.type = 'Person' AND NOT p.archived
                             AND lower(coalesce(p.attributes->>'person_kind', 'human')) = 'ai', false) AS actsasagentperson,
                    k.last_call_at AS lastcallat, coalesce(k.calls_this_week, 0)::int AS callsthisweek,
@@ -463,9 +510,24 @@ public sealed class AgentClient
     public string? ReadOnlyBecause { get; set; }
 
     /// <summary>
-    /// The level it writes at, <c>capture</c> or <c>full</c> (§5.1, decision 7): the level
-    /// <c>Mcp:WriteClients</c> names it at, held to <c>Mcp:Writes</c>. Null when it can't write.
-    /// Filled by <c>GET /api/agents</c>.
+    /// The level stored for it on Connected agents (migration 0076); null leaves it to
+    /// <c>Mcp:WriteClients</c>. <see cref="GivenLevel"/> is what the page shows.
+    /// </summary>
+    [JsonIgnore]
+    public string? StoredLevel { get; set; }
+
+    /// <summary>
+    /// The level it's given, before <c>Mcp:Writes</c> holds it (§5.1, decision 7): <c>off</c> (it
+    /// only reads), <c>capture</c> or <c>full</c>, as set on Connected agents, or else as
+    /// <c>Mcp:WriteClients</c> names it. Null when neither gives it one. Filled by
+    /// <c>GET /api/agents</c>.
+    /// </summary>
+    public string? GivenLevel { get; set; }
+
+    /// <summary>
+    /// The level it writes at, <c>capture</c> or <c>full</c> (§5.1, decision 7): its
+    /// <see cref="GivenLevel"/>, held to <c>Mcp:Writes</c>. Null when it can't write. Filled by
+    /// <c>GET /api/agents</c>.
     /// </summary>
     public string? WriteLevel { get; set; }
 
@@ -475,11 +537,16 @@ public sealed class AgentClient
     public int RefusedThisWeek { get; set; }
 }
 
-/// <summary>The AI-agent Person a client writes as.</summary>
-public sealed class AgentPerson
+/// <summary>An allowed client as a write sees it: the level stored for it, and the AI-agent Person it writes as.</summary>
+public sealed class AgentWriter
 {
-    public Guid Id { get; set; }
-    public string Name { get; set; } = "";
+    /// <summary>The level stored on Connected agents; null leaves it to <c>Mcp:WriteClients</c>.</summary>
+    public string? StoredLevel { get; set; }
+
+    /// <summary>The AI-agent Person in use it acts as; null when it acts as none.</summary>
+    public Guid? PersonId { get; set; }
+
+    public string? PersonName { get; set; }
 }
 
 /// <summary>One row of the call log.</summary>

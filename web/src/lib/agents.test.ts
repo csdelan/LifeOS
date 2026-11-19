@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { CLAUDE_CALLBACK, mockAgentsClient, resetMockAgents, startOfWeek } from "@/lib/mock/agents";
 import {
   agentRows,
+  carriedLevel,
   carriedPerson,
+  levelName,
   replaceable,
   webAddress,
   type AgentGrant,
@@ -25,6 +27,7 @@ function record(clientId: string, extra: Partial<AgentRecord> = {}): AgentRecord
     actsAsAgentPerson: false,
     mayWrite: false,
     readOnlyBecause: null,
+    givenLevel: null,
     writeLevel: null,
     lastCallAt: null,
     callsThisWeek: 0,
@@ -126,6 +129,20 @@ describe("replaceable", () => {
     ).toEqual({ id: "p-new", name: "Claude" });
     expect(carriedPerson([record("plain")])).toBeNull();
   });
+
+  it("carries the write level the most recently allowed of them was given", () => {
+    expect(
+      carriedLevel([
+        record("old", { givenLevel: "capture", allowedAt: "2026-10-01T00:00:00Z" }),
+        record("newer", { givenLevel: "full", allowedAt: "2026-10-28T00:00:00Z" }),
+        record("newest", { allowedAt: "2026-10-29T00:00:00Z" }),
+      ]),
+    ).toBe("full");
+    // Read only is a level too, and carries like the others.
+    expect(carriedLevel([record("off", { givenLevel: "off" })])).toBe("off");
+    expect(carriedLevel([record("plain")])).toBeNull();
+    expect(levelName("off")).toBe("read only");
+  });
 });
 
 describe("mockAgentsClient", () => {
@@ -176,6 +193,37 @@ describe("mockAgentsClient", () => {
     expect(renewed).toMatchObject({ allowed: true, personId: ai.id, personName: ai.title, redirectUri: CLAUDE_CALLBACK });
     const old = (await agents.overview()).agents.find((r) => r.clientId === "mock-claude");
     expect(old).toMatchObject({ allowed: false, replacedBy: "mock-claude-2", personId: ai.id });
+  });
+
+  // Migration 0076: the level is kept in LifeOS and checked as /mcp checks it.
+  it("gives an agent its write level, which writes only once it acts as an AI Person", async () => {
+    const agents = mockAgentsClient();
+    const ai = getState().people.find((p) => p.personKind === "ai")!;
+    expect(await agents.setLevel("mock-claude", "full")).toMatchObject({
+      givenLevel: "full",
+      mayWrite: false,
+      readOnlyBecause: "it acts as no AI-agent Person in use (Connected agents)",
+    });
+    expect(await agents.linkPerson("mock-claude", ai.id)).toMatchObject({ mayWrite: true, writeLevel: "full" });
+    expect(await agents.setLevel("mock-claude", "off")).toMatchObject({
+      mayWrite: false,
+      writeLevel: null,
+      readOnlyBecause: "its write level is read only (Connected agents)",
+    });
+    await expect(agents.setLevel("mock-claude", "admin")).rejects.toThrow(/isn't a write level/);
+    await expect(agents.setLevel("nobody", "full")).rejects.toThrow(/was ever allowed/);
+  });
+
+  it("carries the write level to the client that replaces it", async () => {
+    const agents = mockAgentsClient();
+    await agents.setLevel("mock-claude", "capture");
+    const renewed = await agents.allow("mock-claude-2", "Claude", "https://claude.ai", {
+      redirectUri: CLAUDE_CALLBACK,
+      replaces: ["mock-claude"],
+    });
+    expect(renewed.givenLevel).toBe("capture");
+    // A client that replaces none starts with no level.
+    expect((await agents.allow("mock-helper", "Research helper")).givenLevel).toBeNull();
   });
 
   it("removing a grant leaves LifeOS's list alone", async () => {

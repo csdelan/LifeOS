@@ -36,8 +36,14 @@ export type AgentRecord = {
   /** Why it can only read, in the server log's words; null when it may write. */
   readOnlyBecause: string | null;
   /**
-   * The level it writes at, "capture" or "full" (agent-access plan §5.1, decision 7): the level
-   * `Mcp:WriteClients` names it at, held to `Mcp:Writes`. Null when it can't write.
+   * The write level Chris gave it here, "off", "capture" or "full" (migration 0076), or, when he
+   * gave none, the one `Mcp:WriteClients` names it at. Null when it has neither. Connecting again
+   * carries it to the new client, as it does the Person.
+   */
+  givenLevel: string | null;
+  /**
+   * The level it writes at, "capture" or "full" (agent-access plan §5.1, decision 7): its
+   * `givenLevel`, held to `Mcp:Writes`. Null when it can't write.
    */
   writeLevel: string | null;
   lastCallAt: string | null;
@@ -70,6 +76,13 @@ function writeLevel(level: string): string {
   return WRITE_LEVELS[level] ?? `write (at the ${level} level)`;
 }
 
+/** The levels Chris can give an agent on Connected agents, as its picker names them. */
+export const AGENT_LEVELS: { value: string; label: string }[] = [
+  { value: "off", label: "Read only" },
+  { value: "capture", label: "Capture" },
+  { value: "full", label: "Full" },
+];
+
 /**
  * What agents may change, as Connected agents says it: read-only only when `Mcp:Writes` is off
  * (code review CR64; it used to say read-only while agents were writing).
@@ -77,7 +90,7 @@ function writeLevel(level: string): string {
 export function writesText(writes: string): string {
   return writes === "off"
     ? "Read-only: agents can't change anything in LifeOS."
-    : `Agents you let write can ${writeLevel(writes)}, each at the level Mcp:WriteClients names it at; the rest only read. An agent writes when Mcp:WriteClients names it and it acts as an AI-agent Person.`;
+    : `Agents you let write can ${writeLevel(writes)}. Each writes at the level you give it here, as the AI-agent Person it acts as; the rest only read.`;
 }
 
 /** What one allowed agent may do, as its card says it. */
@@ -138,6 +151,8 @@ export interface AgentsClient {
   /** Removes Supabase's grant, so the agent can't get new tokens. */
   removeGrant(clientId: string): Promise<void>;
   linkPerson(clientId: string, personId: string | null): Promise<AgentRecord>;
+  /** Gives an agent its write level ("off", "capture" or "full"), or null to leave it to the settings. */
+  setLevel(clientId: string, level: string | null): Promise<AgentRecord>;
 }
 
 /** Where an agent stands, from Supabase's grants and LifeOS's list together. */
@@ -229,6 +244,23 @@ export function carriedPerson(replaced: AgentRecord[]): { id: string; name: stri
   return from?.personId ? { id: from.personId, name: from.personName ?? "an AI agent" } : null;
 }
 
+/**
+ * The write level a replacing client takes on (migration 0076): the one the most recently allowed
+ * of them was given, here or in `Mcp:WriteClients`.
+ */
+export function carriedLevel(replaced: AgentRecord[]): string | null {
+  return (
+    [...replaced]
+      .sort((a, b) => (b.allowedAt ?? "").localeCompare(a.allowedAt ?? ""))
+      .find((r) => r.givenLevel !== null)?.givenLevel ?? null
+  );
+}
+
+/** A write level as Connected agents names it, in a sentence: "read only", "capture", "full". */
+export function levelName(level: string): string {
+  return (AGENT_LEVELS.find((l) => l.value === level)?.label ?? level).toLowerCase();
+}
+
 /** An agent's website is its own say, so only a web address is kept; anything else is null. */
 export function webAddress(uri: string | null | undefined): string | null {
   return uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) ? uri.trim() : null;
@@ -291,6 +323,16 @@ export function liveAgentsClient(): AgentsClient {
           api().PUT("/api/agents/{clientId}/person", {
             params: { path: { clientId } },
             body: { personId },
+          }),
+        ),
+      );
+    },
+    async setLevel(clientId, level) {
+      return fits<AgentRecord>()(
+        await unwrap(
+          api().PUT("/api/agents/{clientId}/level", {
+            params: { path: { clientId } },
+            body: { level },
           }),
         ),
       );

@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
+  AGENT_LEVELS,
   accessText,
   agentRows,
   writesText,
@@ -53,9 +54,9 @@ type Pending = { action: AgentAction; title: string; description: string; confir
 
 /**
  * Connected agents (agent-access plan §4.5): each agent Chris connected, whether LifeOS lets it
- * in, what it called, and the Person it acts as. Supabase lists the agents he approved; LifeOS
- * answers only the ones on its own list, so an agent approved at Supabase by anything but the
- * consent page waits here until he allows it.
+ * in, what it called, the Person it acts as and the level it writes at (migration 0076). Supabase
+ * lists the agents he approved; LifeOS answers only the ones on its own list, so an agent approved
+ * at Supabase by anything but the consent page waits here until he allows it.
  */
 export function ConnectedAgents() {
   const overview = useAgentsOverview();
@@ -181,6 +182,7 @@ export function ConnectedAgents() {
               busy={action.isPending}
               onAsk={setPending}
               onLink={(personId) => run({ kind: "link", clientId: row.clientId, personId })}
+              onLevel={(level) => run({ kind: "level", clientId: row.clientId, level })}
             />
           </li>
         ))}
@@ -218,6 +220,7 @@ function AgentCard({
   busy,
   onAsk,
   onLink,
+  onLevel,
 }: {
   row: AgentRow;
   photoArtifactId: string | null;
@@ -226,6 +229,7 @@ function AgentCard({
   busy: boolean;
   onAsk: (pending: Pending) => void;
   onLink: (personId: string | null) => void;
+  onLevel: (level: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const record = row.record;
@@ -252,8 +256,13 @@ function AgentCard({
             <h3 id={titleId} className="font-medium">
               {row.name}
             </h3>
-            <p className="truncate font-mono text-xs text-muted-foreground">
-              {row.uri ? hostOf(row.uri) : row.clientId}
+            {row.uri ? (
+              <p className="truncate font-mono text-xs text-muted-foreground">{hostOf(row.uri)}</p>
+            ) : null}
+            {/* The client id is what the server log names an agent by. */}
+            <p className="break-all font-mono text-xs text-muted-foreground">
+              <span className="sr-only">Client id </span>
+              {row.clientId}
             </p>
           </div>
         </div>
@@ -273,30 +282,50 @@ function AgentCard({
       ) : null}
 
       {record?.allowed ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <label htmlFor={`${titleId}-person`} className="text-muted-foreground">
-            Acts as
-          </label>
-          <Select
-            value={linked}
-            disabled={busy}
-            onValueChange={(v) => onLink(v === NOT_LINKED ? null : v)}
-          >
-            <SelectTrigger id={`${titleId}-person`} className="h-9 min-w-44" aria-label={`Person ${row.name} acts as`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NOT_LINKED}>No Person yet</SelectItem>
-              {choices.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {choices.length === 0 ? (
-            <span className="text-xs text-muted-foreground">Add a Person whose kind is AI to link one.</span>
-          ) : null}
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor={`${titleId}-person`} className="text-muted-foreground">
+              Acts as
+            </label>
+            <Select
+              value={linked}
+              disabled={busy}
+              onValueChange={(v) => onLink(v === NOT_LINKED ? null : v)}
+            >
+              <SelectTrigger id={`${titleId}-person`} className="h-9 min-w-44" aria-label={`Person ${row.name} acts as`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NOT_LINKED}>No Person yet</SelectItem>
+                {choices.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {choices.length === 0 ? (
+              <span className="text-xs text-muted-foreground">Add a Person whose kind is AI to link one.</span>
+            ) : null}
+          </div>
+          {/* Kept in LifeOS (migration 0076), so connecting again carries it over with the Person. */}
+          <div className="flex items-center gap-2">
+            <label htmlFor={`${titleId}-level`} className="text-muted-foreground">
+              Writes
+            </label>
+            <Select value={record.givenLevel ?? "off"} disabled={busy} onValueChange={onLevel}>
+              <SelectTrigger id={`${titleId}-level`} className="h-9 min-w-32" aria-label={`Write level of ${row.name}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AGENT_LEVELS.map((l) => (
+                  <SelectItem key={l.value} value={l.value}>
+                    {l.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       ) : null}
 
