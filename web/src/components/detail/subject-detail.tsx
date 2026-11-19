@@ -102,11 +102,22 @@ function ItemDetail({
 }: SubjectDetailProps & { tab: string; onTabChange: (tab: string) => void }) {
   const subjectRead = useSubject(subjectId);
   const { data, isLoading, isError } = subjectRead;
-  const { data: list } = useListItem(subjectId);
-  const { data: rels } = useRelations(subjectId);
-  const { data: tags } = useSubjectTags(subjectId);
+  const listRead = useListItem(subjectId);
+  const relsRead = useRelations(subjectId);
+  const tagsRead = useSubjectTags(subjectId);
+  const { data: list } = listRead;
+  const { data: rels } = relsRead;
+  const { data: tags } = tagsRead;
   // Its habit row, read only for a habit, where this read every habit to find it (code review CR121).
-  const { data: habitRow } = useHabit(subjectId, (data?.type ?? list?.type) === "Habit");
+  const isHabit = (data?.type ?? list?.type) === "Habit";
+  const habitRead = useHabit(subjectId, isHabit);
+  const { data: habitRow } = habitRead;
+  // The form starts from all of these, and a save writes every attribute the type has and only
+  // adds the parents it shows, so Edit waits for each: a form opened early wrote blanks, or gave a
+  // Goal a second parent, into the log (code review CR149).
+  const formReads = isHabit ? [listRead, relsRead, tagsRead, habitRead] : [listRead, relsRead, tagsRead];
+  const formReady = formReads.every((r) => r.isSuccess);
+  const formFailed = formReads.some((r) => r.isError);
   const [editing, setEditing] = useState(false);
   const [choosingCover, setChoosingCover] = useState(false);
   const [coverPicks, setCoverPicks] = useState(0);
@@ -354,8 +365,10 @@ function ItemDetail({
                   Save
                 </Button>
               </>
+            ) : formFailed ? (
+              <ReadFailed read={formReads} what="What Edit starts from" />
             ) : (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)} disabled={!formReady}>
                 Edit
               </Button>
             )}
