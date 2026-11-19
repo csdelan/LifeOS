@@ -189,8 +189,9 @@ export const ATTR_KEYS_BY_TYPE: Record<SubjectType, readonly string[]> = {
   Appointment: ["date", "start", "end", "location", "meeting_link", "notes", "all_day", "attendees"],
   Idea: ["description", "notes"],
   Commitment: ["description", "notes", "due"],
-  Constraint: ["scope", "limit", "notes"],
-  Season: ["focus", "ends", "notes"],
+  // Their form is the fallback one, which shows a description (code review CR154).
+  Constraint: ["scope", "limit", "description", "notes"],
+  Season: ["focus", "ends", "description", "notes"],
   // The price ({currency: n}) is an object the rewards API writes, not a string attribute.
   Reward: ["kind", "target_usd", "description", "notes"],
 };

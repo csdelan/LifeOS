@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   emptyFormValues,
+  formConfig,
   formParentId,
   groupFields,
   groupTitle,
@@ -11,7 +12,7 @@ import {
   type SubjectFormValues,
 } from "@/lib/subject-forms";
 import { GOAL_NEEDS_TARGET_DATE, HABIT_NEEDS_PARENT } from "@/lib/subject-gates";
-import type { SubjectType } from "@/lib/production-ui-types";
+import { ATTR_KEYS_BY_TYPE, pickApplicableAttrs, type SubjectType } from "@/lib/production-ui-types";
 
 describe("read-only → edit dirty logic", () => {
   it("is never dirty while read-only", () => {
@@ -116,5 +117,23 @@ describe("a sub-goal's form (focus plan G2)", () => {
     expect(subGoalDateWarning("2027-06-01", { ...half, targetDate: null })).toBeUndefined();
     expect(subGoalDateWarning("2027-06-01", { ...half, type: "Value" })).toBeUndefined();
     expect(subGoalDateWarning("2027-06-01", undefined)).toBeUndefined();
+  });
+});
+
+// Each type's attribute keys were listed twice, in ATTR_KEYS_BY_TYPE and in the forms' fields, and a
+// save keeps only the first list's keys, so a field added to a form alone was dropped while the
+// toast said Saved (code review CR154).
+describe("every attribute field a form shows is one a save writes", () => {
+  // Fields that aren't attributes: their own writes (status, parents, people, a repeat pattern).
+  const notAttributes = new Set(["status", "area", "parent", "parents", "person", "recurrence"]);
+  // A repeating Task's "Repeats from" is the pattern's start, which `recur` writes with the pattern.
+  const writtenElsewhere: Partial<Record<SubjectType, string[]>> = { Task: ["start"] };
+
+  it.each(Object.keys(ATTR_KEYS_BY_TYPE) as SubjectType[])("%s", (type) => {
+    const keys = formConfig(type)
+      .fields.filter((f) => !notAttributes.has(f.kind) && !writtenElsewhere[type]?.includes(f.key))
+      .map((f) => f.key);
+    const kept = Object.keys(pickApplicableAttrs(type, Object.fromEntries(keys.map((k) => [k, "x"]))));
+    expect(keys.filter((k) => !kept.includes(k))).toEqual([]);
   });
 });
