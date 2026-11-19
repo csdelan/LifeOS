@@ -42,4 +42,26 @@ public sealed class PilotReaderTests(ClassDatabase classDb) : IClassFixture<Clas
         var listed = Assert.Single(pilot.QuerySubjects(SubjectTypes.Task), s => s.Id == task.Id);
         Assert.Equal("Completed", listed.Status);
     }
+
+    /// <summary>
+    /// Code review CR152: the Pilot reads one Task's timer by its key as text, so the lookup goes
+    /// below the view's window (EventIndexTests plans the same SQL); here it still finds the timer.
+    /// </summary>
+    [Fact]
+    public async Task The_Pilot_reads_one_tasks_running_timer_and_none_for_a_task_never_timed()
+    {
+        DapperConventions.Apply();
+        var provider = classDb.Services().BuildServiceProvider();
+        var subjects = provider.GetRequiredService<SubjectService>();
+        var ns = Guid.NewGuid().ToString("N");
+        var timed = await subjects.CreateAsync(SubjectTypes.Task, $"paint the fence {ns}", cancellationToken: Ct);
+        var untimed = await subjects.CreateAsync(SubjectTypes.Task, $"oil the hinge {ns}", cancellationToken: Ct);
+        await provider.GetRequiredService<TimerService>().ApplyAsync(timed.Urn, "start", Ct);
+
+        var pilot = new PilotSubjectReader(BskReader.ConnectionStringFrom(classDb.ConnectionString));
+
+        var timer = pilot.GetTimer(timed.Id);
+        Assert.Equal((timed.Id, "running"), (timer?.SubjectId, timer?.State));
+        Assert.Null(pilot.GetTimer(untimed.Id));
+    }
 }

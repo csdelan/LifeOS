@@ -140,7 +140,10 @@ public sealed class EventIndexTests(ClassDatabase classDb) : IClassFixture<Class
         new("one review", $"SELECT * FROM bsk.v_review WHERE id = '{Id}';", "event_state_change_subject", true),
         new("one space", $"SELECT * FROM bsk.v_space WHERE id = '{Id}';", "event_archive_change_subject", true),
         new("a subject's events", $"SELECT * FROM bsk.v_subject_event WHERE subject_id = '{Id}';", "event_pkey", true),
-        new("one task's timer", $"SELECT * FROM bsk.v_task_timer WHERE subject_key = '{Id}';", "event_timer_subject_idx", true),
+        // The Pilot's own SQL, which filtered on the uuid cast and read every timer event (code review CR152).
+        new("one task's timer",
+            LifeOs.Pilot.Reader.SubjectReader.TimerByIdSql.Replace("@subjectKey", $"'{Id}'", StringComparison.Ordinal),
+            "event_timer_subject_idx", true),
         // Code review CR63: a capture sent again asks whether it was ever triaged.
         new("whether an item was ever triaged",
             NpgsqlEventReader.EverTriagedSql.Replace("@item", $"'{Id}'", StringComparison.Ordinal), "event_triage_item", true),

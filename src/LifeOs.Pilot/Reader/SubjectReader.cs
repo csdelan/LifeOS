@@ -363,12 +363,18 @@ public sealed class SubjectReader(string connectionString)
         FROM bsk.v_task_timer
         """;
 
+    /// <summary>
+    /// One Task's timer by its key as text, the view's partition: a filter on the uuid cast
+    /// (<c>subject_id</c>) can't go below the view's window, so it read every timer event in history
+    /// each time the timer bar reloaded (code review CR152). <c>EventIndexTests</c> plans this SQL.
+    /// </summary>
+    public const string TimerByIdSql = TimerSelect + " WHERE subject_key = @subjectKey";
+
     /// <summary>One Task's timer (TASKS-2), or null when it has never run.</summary>
     public TaskTimerRow? GetTimer(Guid subjectId)
     {
         using var db = Open();
-        return db.QueryFirstOrDefault<TaskTimerRow>(
-            $"{TimerSelect} WHERE subject_id = @subjectId", new { subjectId });
+        return db.QueryFirstOrDefault<TaskTimerRow>(TimerByIdSql, new { subjectKey = subjectId.ToString() });
     }
 
     /// <summary>Every timed Task's timer: running first, then paused, then most recently changed.</summary>
