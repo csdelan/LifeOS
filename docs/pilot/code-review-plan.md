@@ -675,3 +675,4 @@ built.
   CR147 (fourteen repository comments no longer say `bsk` lacks Dapper's underscore matching, from
   P3); CR148 (seven stale `TODO(api)` notes go, and a seam test finds a note for an endpoint the
   live seam already calls; from P3).
+- **2026-11-19** at d35b8e2: 6.4 (−0.1; 6.44 from 6.56). [Review](../agents/quality-reviews/2026-11-19.md).
