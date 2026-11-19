@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using LifeOs.Pilot.Shell;
 
@@ -94,38 +93,14 @@ public sealed class BskCli(string executablePath, bool fromWorkingTree = false)
     /// <summary>Like <see cref="Run(string[])"/>, with extra environment variables for the child process.</summary>
     public string Run(IReadOnlyDictionary<string, string>? extraEnv, params string[] args)
     {
-        var startInfo = new ProcessStartInfo(executablePath)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        foreach (var arg in args)
-        {
-            startInfo.ArgumentList.Add(arg);
-        }
-
-        if (extraEnv is not null)
-        {
-            foreach (var (key, value) in extraEnv)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
-
-        using var process = Process.Start(startInfo)
+        var (exitCode, stdout, stderr) = ChildProcess.Run(executablePath, args, extraEnv)
             ?? throw new BskException($"Could not start {executablePath}.");
 
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-
-        if (process.ExitCode != 0)
+        if (exitCode != 0)
         {
             var message = string.IsNullOrWhiteSpace(stderr) ? stdout : stderr;
             throw new BskException(
-                string.IsNullOrWhiteSpace(message) ? $"bsk exited with code {process.ExitCode}." : message.Trim());
+                string.IsNullOrWhiteSpace(message) ? $"bsk exited with code {exitCode}." : message.Trim());
         }
 
         return stdout;

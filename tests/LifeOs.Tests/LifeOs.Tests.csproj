@@ -22,6 +22,7 @@
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\TimerFormat.cs" Link="Pilot\TimerFormat.cs" />
     <Compile Include="..\..\src\LifeOs.Pilot\Shell\NewItemWrites.cs" Link="Pilot\NewItemWrites.cs" />
     <Compile Include="..\..\src\LifeOs.Pilot\Cli\BskJson.cs" Link="Pilot\BskJson.cs" />
+    <Compile Include="..\..\src\LifeOs.Pilot\Cli\ChildProcess.cs" Link="Pilot\ChildProcess.cs" />
   </ItemGroup>
 
   <ItemGroup>
