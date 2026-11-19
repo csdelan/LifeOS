@@ -676,3 +676,13 @@ built.
   P3); CR148 (seven stale `TODO(api)` notes go, and a seam test finds a note for an endpoint the
   live seam already calls; from P3).
 - **2026-11-19** at d35b8e2: 6.4 (−0.1; 6.44 from 6.56). [Review](../agents/quality-reviews/2026-11-19.md).
+  Built: CR149 (an item's Edit waits for every read its form starts from, so a save can't write
+  blanks or a second parent); CR150 (a lab visit's range sync runs through `AfterCommit`, so a
+  retry can't write a second visit); CR151 (the Pilot reads `bsk`'s stdout and stderr together,
+  and no longer hangs on a full stderr pipe); CR152 (the Pilot's timer read filters on the key as
+  text, and `EventIndexTests` plans its SQL); CR153 (a migration that replaces a function an index
+  calls must rebuild the index, `IndexedFunctionRebuildTests`); CR154 (a Constraint's and a
+  Season's Description save, and every form's attribute fields are tied to the keys a save
+  writes); CR155 (a review counts a habit's first day in the home zone); CR156 (every route reads
+  its day through `searchDay`, and Reviews no longer takes any text); CR157 (two comments no longer
+  call `/mcp` read-only). The review's "Not fixed tonight" says why each of the rest waits.
