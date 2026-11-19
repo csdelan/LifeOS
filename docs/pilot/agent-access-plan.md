@@ -976,6 +976,29 @@ and `Mcp/Tools/ItemWriteTools.cs`, tested in `tests/LifeOs.Tests/McpItemWriteTes
 says "via <Person>" on what an agent wrote, and an item's History tab shows its field changes
 (§5.3, `tests/LifeOs.Tests/AgentViaTests.cs`). Staging stays at `capture` until step 2.5.
 
+**2026-11-19:** step 2.5 is switched on (staging release v108). `Mcp__Writes` is `full`, and two
+clients are named:
+- claude.ai's connector (`3adb4a84-9527-4145-ae5a-dd6f7f384023`) at `full`, acting as Claude;
+- the vault's nightly sweep (`d23751f0-e9e6-4e1a-987c-7c58e7d0262b`) at `capture`, acting as the
+  AI Person Vault sweep.
+
+The sweep's connection is its own (decision 7). It's Claude Code's `lifeos-sweep` server, set in
+Claude Code's local config for the vault's folder only, and the sweep's scheduled task now starts
+in that folder. The vault's `.claude/settings.local.json` denies claude.ai's LifeOS connector there
+(`mcp__844609bb-…`), so an unattended run can't reach the `full` tools. The sweep's prompt lives in
+the vault, in `99 System/tools/nightly-sweep-task.md`. Found on the way:
+- The sweep used to start in the LifeOS repo's folder and reached LifeOS only through claude.ai's
+  connector, which the desktop app passes into Code sessions. The repo folder's own Claude Code
+  `lifeos` server never finished a sign-in: every attempt from the app since 2026-10-28 timed out.
+  Signing in from `claude` in a terminal works.
+- claude.ai's connector was cut off twice: on 2026-11-16, and again before the sweep of
+  2026-11-17. Supabase refused to renew its sign-in. The first was the web's sign-out, which ended
+  every session (141fbda). The second came after that fix, most likely from a tab still running
+  the old code. Supabase's auth logs, kept about a day, would say which. claude.ai had also gained
+  a second LifeOS connector, which Chris removed.
+- Each reconnect registers a new client, which `Mcp__WriteClients` must name again. Connected
+  agents shows a client's website rather than its id, so the ids came from `fly logs`.
+
 ### 5.1 The switch
 
 `Mcp__Writes` has three levels: `off` (the default), `capture` and `full`. A write tool is
@@ -1005,9 +1028,10 @@ and, for step 2.5, Chris's chats at `full` with the sweep's own client at `captu
 fly secrets set Mcp__Writes=full Mcp__WriteClients=<chat client id>:full,<sweep client id> -a lifeos-mz55-staging
 ```
 
-Setting it back to `off` the same way turns writes off again. The client id is on the
-Connected agents page; Claude registers a new one each time it connects again, so the new
-one must be named too. The allow list and the Person link are read on every call, so revoking
+Setting it back to `off` the same way turns writes off again. Connected agents shows a
+client's id only when it has no website, so take the id from the log line below, which each
+client writes as it lists its tools. Claude registers a new one each time it connects again, so
+the new one must be named too. The allow list and the Person link are read on every call, so revoking
 the client or unlinking its Person stops its writes at once.
 
 An agent can't tell why it has no write tools, so each time a client lists tools with writes on,
@@ -1202,7 +1226,7 @@ writing agent got the same level.
 | 2.2 | Groundwork: `full` accepted; a level for each client (decision 7), listed and refused by level; Connected agents shows each agent's level; a status set to what it already is writes nothing; a create can carry a request id | Done 2026-11-18. Tests: a capture-level agent is listed and may call only the capture tools; a retried create makes one item; setting a status again writes nothing and pays nothing more |
 | 2.3 | Item tools at `full`: `set_status`, `update_item`, `create_item`, `tag`, `link`; the server instructions and the guide say what they do | Done 2026-11-18. Each tool's tests: refusals in words, items of a switched-off area refused, events carry the agent's source, the log holds what changed from and to (the web's history shows it with 2.4) |
 | 2.4 | "via Claude" in the web: status history, journal entries, the Inbox and field changes show the agent's Person | Done 2026-11-18 (§5.3): `AgentViaTests`, the web's history, journal and Inbox tests, and the golden and a11y specs in `agents.spec.ts`. Lands before 2.5 |
-| 2.5 | `full` on staging for Chris's chats, the sweep on its own connection at `capture` | A week of use; findings recorded here |
+| 2.5 | `full` on staging for Chris's chats, the sweep on its own connection at `capture` | On since 2026-11-19 (§5, status). A week of use, to about 2026-11-26; findings recorded here |
 | 2.6 | Records at `full`: `check_off_habit`, `timer`, `log_meal` (only with `food` on) | After a week of 2.3 |
 
 Phase 3's step 3.2 (Assign to, the queue, writes scoped to an agent's own Tasks) builds on 2.3.
