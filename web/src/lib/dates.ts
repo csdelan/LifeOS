@@ -180,3 +180,15 @@ export function dayNumber(day: string): number {
   const [y, m, d] = day.split("-").map(Number);
   return Math.round(Date.UTC(y, m - 1, d) / 86_400_000);
 }
+
+/**
+ * A day from a URL's search, as `yyyy-MM-dd` naming a real date, or undefined: every route that
+ * reads a day takes it this way. The Reviews route took any text, which went into the
+ * `openReview` write (code review CR156).
+ */
+export function searchDay(value: unknown): string | undefined {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  const [y, m, d] = value.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? value : undefined;
+}

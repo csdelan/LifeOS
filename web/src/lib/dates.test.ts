@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { homeDayAt, isOverdue, todayIso } from "@/lib/dates";
+import { homeDayAt, isOverdue, searchDay, todayIso } from "@/lib/dates";
 
 // 06:30 UTC on 15 February 2003: 10:30 pm on the 14th in Pacific time. UTC+14 (Kiritimati)
 // and UTC−11 (Pago Pago) are a day apart, as in the kernel's HomeCalendarTests.
@@ -47,5 +47,16 @@ describe("overdue (code review CR74)", () => {
     expect(isOverdue("2026-10-27", false, "2026-10-27")).toBe(false);
     expect(isOverdue("2026-10-28", false, "2026-10-27")).toBe(false);
     expect(isOverdue(null, false, "2026-10-27")).toBe(false);
+  });
+});
+
+// Code review CR156: a route reads a day as a real yyyy-MM-dd date or not at all.
+describe("a day from a URL", () => {
+  it("takes a real yyyy-MM-dd date and nothing else", () => {
+    expect(searchDay("2026-11-19")).toBe("2026-11-19");
+    expect(searchDay("2028-02-29")).toBe("2028-02-29");
+    for (const bad of ["2026-02-30", "2026-13-01", "11/19/2026", "2026-11-19T00:00", "", "today", 20261119, undefined]) {
+      expect(searchDay(bad)).toBeUndefined();
+    }
   });
 });

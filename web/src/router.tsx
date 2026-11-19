@@ -14,6 +14,7 @@ import type { GraphLayoutKind, MapViewMode, OrphanFilter } from "@/lib/graph-mod
 import { parseMapShow, type MapShow } from "@/lib/map-show";
 import { parseBrowseType, type BrowseType } from "@/lib/browse";
 import { ErrorView } from "@/components/shell/error-view";
+import { searchDay } from "@/lib/dates";
 
 export type MapSearch = {
   selected?: string;
@@ -189,7 +190,7 @@ const foodRoute = createRoute({
   path: "/food",
   validateSearch: (search: Record<string, unknown>): FoodSearch => ({
     view: search.view === "week" || search.view === "month" ? search.view : undefined,
-    date: typeof search.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? search.date : undefined,
+    date: searchDay(search.date),
   }),
   component: lazyRouteComponent(() => import("@/pages/food-page"), "FoodPage"),
 });
@@ -242,7 +243,7 @@ const reviewsRoute = createRoute({
   path: "/reviews",
   validateSearch: (search: Record<string, unknown>): ReviewsSearch => ({
     kind: search.kind === "weekly" || search.kind === "daily" ? search.kind : undefined,
-    date: typeof search.date === "string" ? search.date : undefined,
+    date: searchDay(search.date),
   }),
   component: lazyRouteComponent(() => import("@/pages/reviews-page"), "ReviewsPage"),
 });

@@ -61,3 +61,12 @@ describe("a page's file holds the page, and its parts live beside it (code revie
     expect(long).toEqual([]);
   });
 });
+
+// Code review CR156: the Reviews route took any text as its day, which went into a write.
+describe("the router's days", () => {
+  it("reads every day in a URL's search through searchDay", () => {
+    const days = [...router.matchAll(/^\s+date: (.*)$/gm)].map((m) => m[1]);
+    expect(days.length).toBeGreaterThan(0);
+    expect(days.filter((d) => d !== "searchDay(search.date),")).toEqual([]);
+  });
+});
