@@ -220,6 +220,7 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IHomeCalendar>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<EventSource>(),
+            sp.GetRequiredService<AfterCommit>(),
             reportsEnabled: StoresPhotos(sp, settings)));
 
         // A Person's photo (GEN-15), stored as food and space photos are.

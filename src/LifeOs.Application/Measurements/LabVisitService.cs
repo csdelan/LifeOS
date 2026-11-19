@@ -71,6 +71,7 @@ public sealed class LabVisitService(
     IHomeCalendar calendar,
     IClock clock,
     EventSource eventSource,
+    AfterCommit afterCommit,
     bool reportsEnabled = true)
 {
     private readonly LabVisitReads reads = new(metrics, calendar);
@@ -109,7 +110,7 @@ public sealed class LabVisitService(
         writes.AddRange(read.Results.Select(r => new MetricReadingWrite(
             Declared(now, now, MetricReadingService.Voided(r.Reading.Id)), r.Metric.Id)));
         await metrics.AppendReadingsAsync(writes, cancellationToken);
-        await SyncRangesAsync(read.Results.Select(r => r.Metric.Id), cancellationToken);
+        await FollowRangesAsync(read.Results.Select(r => r.Metric.Id), read.Visit.Id);
         return read;
     }
 
@@ -236,7 +237,7 @@ public sealed class LabVisitService(
             Declared(now, now, MetricReadingService.Voided(d.Id)), d.MetricId)));
 
         await metrics.AppendReadingsAsync(writes, cancellationToken);
-        await SyncRangesAsync(plans.Select(p => p.Metric!.Id).Concat(dropped.Select(d => d.MetricId)), cancellationToken);
+        await FollowRangesAsync(plans.Select(p => p.Metric!.Id).Concat(dropped.Select(d => d.MetricId)), visitId);
         return await GetAsync(visitId.ToString(), cancellationToken);
     }
 
@@ -355,6 +356,25 @@ public sealed class LabVisitService(
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// <see cref="SyncRangesAsync"/> after the visit's own commit, through <see cref="AfterCommit"/>:
+    /// the results are in the log by then, so a failure here is logged and left, never thrown. A
+    /// throw read as "nothing was written", and a retried log wrote a second visit (code review
+    /// CR150). A range left behind follows at the test's next saved result.
+    /// </summary>
+    private Task FollowRangesAsync(IEnumerable<Guid> metricIds, Guid visitId)
+    {
+        var ids = metricIds.Distinct().ToList();
+        return afterCommit.RunAsync(
+            "following each test's range to its newest report", $"lab visit {visitId}",
+            async ct =>
+            {
+                await SyncRangesAsync(ids, ct);
+                return true;
+            },
+            false);
     }
 
     /// <summary>

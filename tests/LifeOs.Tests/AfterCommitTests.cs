@@ -214,6 +214,27 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         Assert.Empty(missing);
     }
 
+    /// <summary>
+    /// Code review CR150: a lab visit's results are in the log before each test's range follows its
+    /// newest report, so a failure there is logged and left, and the visit is answered, not thrown:
+    /// a throw read as "nothing was written", and a retried log wrote a second visit.
+    /// </summary>
+    [Fact]
+    public async Task A_lab_visit_whose_range_follow_fails_is_written_and_answered()
+    {
+        var (kernel, ports, log) = Build();
+        var test = $"Zinc {Guid.NewGuid().ToString("N")[..6]}";
+        var visits = kernel.GetRequiredService<LifeOs.Application.Measurements.LabVisitService>();
+
+        ports.Fail($"{nameof(IMetricRepository)}.{nameof(IMetricRepository.GetReadingsAsync)}");
+        var read = await visits.LogAsync(new LifeOs.Application.Measurements.LabVisitEntry(
+            DateTimeOffset.UtcNow.AddDays(-1), "Made-up Lab", null, [new(test, 80m, 60m, 120m, Unit: "ug/dL")]), Ct);
+
+        Assert.Equal(test, Assert.Single(read.Results).Metric.Name);
+        Assert.Single((await visits.ListAsync(Ct)).Visits, v => v.Visit.Id == read.Visit.Id);
+        Assert.Equal(["following each test's range to its newest report"], log.Failed);
+    }
+
     [Fact]
     public async Task With_nothing_failing_a_write_is_not_pending()
     {
@@ -234,6 +255,7 @@ public sealed class AfterCommitTests(ClassDatabase classDb) : IClassFixture<Clas
         ports.Decorate<ILedgerRepository>(services);
         ports.Decorate<ITaskSeriesRepository>(services);
         ports.Decorate<IDomainCreditReader>(services);
+        ports.Decorate<IMetricRepository>(services);
         services.AddSingleton<IFollowUpLog>(log);
         return (services.BuildServiceProvider(), ports, log);
     }
