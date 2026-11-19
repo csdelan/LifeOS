@@ -111,6 +111,11 @@ export function relativeDayLabel(iso: string, today = todayIso()): string {
   return formatDay(iso);
 }
 
+/**
+ * The day `iso` falls on in the browser's own zone, not the home zone: for a day the kernel files
+ * something under, use `homeDayAt` (code review CR155). The rewards history keeps the viewer's day
+ * by choice (xp-domains plan).
+ */
 export function localDateFromTimestamp(iso: string): string {
   const dt = new Date(iso);
   const y = dt.getFullYear();

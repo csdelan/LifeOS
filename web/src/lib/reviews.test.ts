@@ -197,6 +197,19 @@ describe("habit check-offs (REVIEW-5)", () => {
     ]);
   });
 
+  // Code review CR155: a habit with no start date tracks from the home day it was made on.
+  it("tracks a habit with no start date from the home day it was made, not the browser's", () => {
+    const before = window.__LIFEOS_PUBLIC_CONFIG__;
+    window.__LIFEOS_PUBLIC_CONFIG__ = { homeTimeZone: "America/Los_Angeles" };
+    try {
+      // 06:30 UTC on 1 November is 23:30 on 31 October at home.
+      const days = reviewHabitDays([habit("late night", { createdAt: "2026-11-01T06:30:00Z" })], [], "2026-10-31", "2026-11-01", "2026-11-01");
+      expect(days.map((d) => d.rows.length)).toEqual([1, 1]);
+    } finally {
+      window.__LIFEOS_PUBLIC_CONFIG__ = before;
+    }
+  });
+
   it("still shows a day that was recorded for a habit no longer tracked", () => {
     const days = reviewHabitDays([], [followed("old", "2026-11-02")], "2026-11-02", "2026-11-02", "2026-11-08");
     expect(days[0].rows.map((r) => r.habitName)).toEqual(["old"]);

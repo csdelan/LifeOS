@@ -1,4 +1,4 @@
-import { addDays, endOfWeekSunday, formatTimestamp, localDateFromTimestamp } from "@/lib/dates";
+import { addDays, endOfWeekSunday, formatTimestamp, homeDayAt } from "@/lib/dates";
 import { habitStage } from "@/lib/establish";
 import { habitDay, type HabitDay } from "@/lib/habit-days";
 import type {
@@ -151,7 +151,9 @@ function tracksOn(habit: HabitRow, day: string): boolean {
   if (habit.archived) return false;
   const stage = habitStage(habit);
   if (stage !== "building" && stage !== "established") return false;
-  const from = habit.startDate || localDateFromTimestamp(habit.createdAt);
+  // With no start date, a habit tracks from the home day it was made on, as the kernel files its
+  // days; the browser's own day missed its first day when viewed from another zone (code review CR155).
+  const from = habit.startDate || homeDayAt(new Date(habit.createdAt));
   if (from > day) return false;
   return !habit.endDate || habit.endDate >= day;
 }
